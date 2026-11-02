@@ -356,7 +356,7 @@ bool Touch_Init(int w, int h, uint32_t orientation_, bool readOnly) {
             }
             uint8_t *bits = NULL;
             ssize_t bits_size = 0;
-            int res;
+            int res, j, k;
             while (1) {
                 res = ioctl(fd, EVIOCGBIT(EV_KEY, bits_size), bits);
                 if (res < bits_size)
