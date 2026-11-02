@@ -1,0 +1,37 @@
+name: Build ninmods (client.sh)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ARM64 Executable
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25c
+          add-to-path: true
+
+      - name: Build with ndk-build
+        run: |
+          echo "Starting ndk-build..."
+          ndk-build NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=jni/Android.mk NDK_APPLICATION_MK=jni/Application.mk -j$(nproc)
+          echo "Build finished. Checking output..."
+          ls -la libs/arm64-v8a/
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: client.sh-arm64-v8a
+          path: libs/arm64-v8a/client.sh
+          if-no-files-found: error

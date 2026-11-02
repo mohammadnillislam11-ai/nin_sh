@@ -1,0 +1,9 @@
+# Build outputs
+obj/
+libs/
+*.o
+*.d
+*.bak
+
+# Ensure prebuilt static library is preserved
+!src/shadowhook/libshadowhook.a
