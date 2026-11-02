@@ -23,8 +23,6 @@ namespace ui::menu {
     // ============================================
     static float  ma     = 0.f;
     static int    tab    = 0;
-    static bool   drag   = false;
-    static ImVec2 doff(0, 0);
     static ImVec2 g_menu_pos(-1.f, -1.f);
 
     static constexpr float R  = 10.f;
@@ -713,23 +711,6 @@ namespace ui::menu {
         float fvw = ImGui::CalcTextSize(fv).x;
         dl->AddText(ImGui::GetFont(), 10.f,
             {wp.x + ws.x - fvw - 16, fy + 16}, col(UITheme::text_dim, ma), fv);
-
-        if ((mp.x>=wp.x && mp.x<=wp.x+ws.x && mp.y>=wp.y && mp.y<=wp.y+headerH)) {
-            if (ImGui::IsMouseClicked(0)) {
-                drag = true;
-                doff = {mp.x-wp.x, mp.y-wp.y};
-            }
-        }
-        if (drag) {
-            if (ImGui::IsMouseDown(0)) {
-                ImVec2 np{mp.x-doff.x, mp.y-doff.y};
-                np.x = ImClamp(np.x, 0.f, g_sw-ws.x);
-                np.y = ImClamp(np.y, 0.f, g_sh-ws.y);
-                g_menu_pos = np;
-            } else {
-                drag = false;
-            }
-        }
 
         ImGui::End();
         ImGui::PopStyleColor(2);

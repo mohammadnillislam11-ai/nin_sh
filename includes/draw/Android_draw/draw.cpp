@@ -147,7 +147,7 @@ void drawBegin() {
     screen_config();
     if (::orientation != displayInfo.orientation) {
         ::orientation = displayInfo.orientation;
-        touch::update(displayInfo.width, displayInfo.height, displayInfo.orientation);
+        UpdateScreenData(displayInfo.width, displayInfo.height, displayInfo.orientation);
         if (g_window) {
             g_window->Pos.x = 100;
             g_window->Pos.y = 125;

@@ -145,7 +145,7 @@ static int start_overlay() {
     }
     printf(FG_BGREEN "  [✓] GUI ready\n" RST);
 
-    touch::init(displayInfo.width, displayInfo.height, (uint8_t)displayInfo.orientation);
+    Touch_Init(displayInfo.width, displayInfo.height, displayInfo.orientation, true);
 
     // ─── BYPASS ───
     printf(FG_BBLUE "  [2/3] " RST FG_BWHITE "Init bypass...\n" RST);
@@ -203,10 +203,10 @@ static int start_overlay() {
         drawBegin();
         ui::menu::render();
         drawEnd();
-        usleep(2000);
+        usleep(16000);
 
         // ─── DEBUG LOG TIAP 5 DETIK ───
-        if (++dbgCounter >= 2500) {  // ~5 detik
+        if (++dbgCounter >= 300) {  // ~5 detik (60 FPS * 5)
             dbgCounter = 0;
 
             size_t nPlayers = 0;
