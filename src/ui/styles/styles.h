@@ -7,6 +7,8 @@
 #include <algorithm>
 
 inline float g_sw, g_sh;
+extern float global_anim_time;
+extern float g_ui_scale;
 
 namespace UITheme {
     // BACKGROUND
