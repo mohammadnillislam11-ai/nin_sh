@@ -440,7 +440,7 @@ namespace android {
                 void *parentHandle = nullptr;
                 String8 windowName(name);
                 LayerMetadata layerMetadata;
-                uint32_t flags = secure ? 0x80 : 0;
+                uint32_t flags = 0; // Screen recording & screenshot enabled (no eSecure / eSkipScreenshot)
 
                 if (12 <= Functionals::GetInstance().systemVersion) {
                     static void *fakeParentHandleForBinder = nullptr;
@@ -450,8 +450,6 @@ namespace android {
                 StrongPointer<void> result{};
                 if (Functionals::GetInstance().systemVersion <= 9) {
                     int value = -1;
-                    if (!secure && hide)
-                        value = 441731;
 
                     result = reinterpret_cast<StrongPointer<void> (*)(void *, void *, uint32_t, uint32_t, int32_t,
                                                                       uint32_t, void *, int32_t, int32_t)>(
@@ -460,14 +458,7 @@ namespace android {
                                                                                              nullptr,
                                                                                              value, -1);
                 } else {
-                    if (!secure && hide) {
-                        if (Functionals::GetInstance().systemVersion > 9 &&
-                            Functionals::GetInstance().systemVersion < 12) {
-                            layerMetadata.setInt32(2, 441731);
-                        } else {
-                            flags = 0x40;
-                        }
-                    }
+
                     result = Functionals::GetInstance().SurfaceComposerClient__CreateSurface(data, windowName, width,
                                                                                              height, 1, flags,
                                                                                              parentHandle,
@@ -568,7 +559,7 @@ namespace android {
         }
 
         static ANativeWindow *
-        Create(const char *name, int32_t width = -1, int32_t height = -1, bool hide = true, bool secure = false) {
+        Create(const char *name, int32_t width = -1, int32_t height = -1, bool hide = false, bool secure = false) {
             auto &surfaceComposerClient = GetComposerInstance();
 
             while (-1 == width || -1 == height) {

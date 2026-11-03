@@ -27,7 +27,7 @@ bool initGUI_draw(uint32_t _screen_x, uint32_t _screen_y, bool log, bool hide) {
     #else
         InitVulkan();
         SetupVulkan();
-        ::native_window = android::ANativeWindowCreator::Create("AImGui", _screen_x, _screen_y, hide);
+        ::native_window = android::ANativeWindowCreator::Create("AImGui", _screen_x, _screen_y, false, false);
         SetupVulkanWindow(::native_window, (int) _screen_x, (int) _screen_y);
     #endif
     if (!ImGui_init()) {
@@ -42,7 +42,7 @@ bool initGUI_draw(uint32_t _screen_x, uint32_t _screen_y, bool log, bool hide) {
 }
 
 bool init_egl(uint32_t _screen_x, uint32_t _screen_y, bool log, bool hide) {
-    ::native_window = android::ANativeWindowCreator::Create("AImGui", _screen_x, _screen_y, hide);
+    ::native_window = android::ANativeWindowCreator::Create("AImGui", _screen_x, _screen_y, false, false);
 
     ANativeWindow_acquire(native_window);
     display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
