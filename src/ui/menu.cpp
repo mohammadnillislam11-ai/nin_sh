@@ -17,7 +17,6 @@ static float ui_opacity = 1.0f;
 
 // Floating icons toggles (Brutal UI feature)
 static bool showFloatingIcons = false;
-static bool floatAim = false;
 static bool floatESP = false;
 
 // Custom Brutal Toggle Switch
@@ -91,16 +90,14 @@ namespace ui::menu {
 
             float padding = 8.0f;
             float totalWidth = ImGui::GetContentRegionAvail().x - (padding * 2);
-            float tabWidth = totalWidth / 4.0f; 
+            float tabWidth = totalWidth / 3.0f; 
 
             ImGui::SetCursorPosX(padding);
-            if (ImGui::Button("AIMBOT", ImVec2(tabWidth - 4.0f, 40))) activeTab = 0;
+            if (ImGui::Button("VISUALS / ESP", ImVec2(tabWidth - 4.0f, 40))) activeTab = 0;
             ImGui::SameLine();
-            if (ImGui::Button("ESP", ImVec2(tabWidth - 4.0f, 40))) activeTab = 1;
+            if (ImGui::Button("SETTINGS", ImVec2(tabWidth - 4.0f, 40))) activeTab = 1;
             ImGui::SameLine();
-            if (ImGui::Button("SETTINGS", ImVec2(tabWidth - 4.0f, 40))) activeTab = 2;
-            ImGui::SameLine();
-            if (ImGui::Button("ABOUT", ImVec2(tabWidth - 4.0f, 40))) activeTab = 3;
+            if (ImGui::Button("ABOUT", ImVec2(tabWidth - 4.0f, 40))) activeTab = 2;
 
             ImGui::PopStyleVar(2);
             ImGui::EndChild();
@@ -108,29 +105,8 @@ namespace ui::menu {
             ImGui::Separator();
             ImGui::Dummy(ImVec2(0, 8));
 
-            // TAB 0: AIMBOT
+            // TAB 0: VISUALS / ESP
             if (activeTab == 0) {
-                ImGui::SeparatorText("Aimbot Configuration");
-                ImGui::Dummy(ImVec2(0, 5));
-
-                ImGui::Checkbox("ENABLE AIM LOCK", &cfg::aim::enable);
-                ImGui::Dummy(ImVec2(0, 4));
-                ImGui::Checkbox("SHOW FOV CIRCLE", &cfg::aim::show_fov);
-                ImGui::Checkbox("AIM ONLY ON FIRE", &cfg::aim::trigger_firing);
-                ImGui::Checkbox("TARGET KNOCKED", &cfg::aim::target_knock);
-
-                ImGui::Dummy(ImVec2(0, 5));
-                ImGui::Text("TARGET BONE");
-                const char* bones[] = { "Head", "Neck / Chest" };
-                ImGui::SetNextItemWidth(250);
-                ImGui::Combo("##AimBone", &cfg::aim::target_bone, bones, 2);
-
-                ImGui::Dummy(ImVec2(0, 5));
-                ImGui::SliderFloat("FOV Radius", &cfg::aim::fov_radius, 30.0f, 400.0f, "%.0f px");
-                ImGui::SliderFloat("Smoothness", &cfg::aim::smooth, 1.0f, 20.0f, "%.1f");
-            }
-            // TAB 1: VISUALS / ESP
-            else if (activeTab == 1) {
                 ImGui::SeparatorText("Visuals / ESP");
                 ImGui::Dummy(ImVec2(0, 5));
 
@@ -152,13 +128,12 @@ namespace ui::menu {
                 ImGui::Combo("Box Style", &cfg::esp::box_type, boxTypes, 3);
                 ImGui::SliderFloat("Max Range", &cfg::esp::max_range, 50.0f, 500.0f, "%.0f m");
             }
-            // TAB 2: CONFIGURATION & SETTINGS
-            else if (activeTab == 2) {
+            // TAB 1: CONFIGURATION & SETTINGS
+            else if (activeTab == 1) {
                 ImGui::SeparatorText("Configuration & Targets");
                 ImGui::Dummy(ImVec2(0, 5));
 
-                if (ImGui::Checkbox("Floating Quick Icons", &showFloatingIcons)) {
-                    floatAim = showFloatingIcons;
+                if (ImGui::Checkbox("Floating Quick ESP Icon", &showFloatingIcons)) {
                     floatESP = showFloatingIcons;
                 }
 
@@ -175,8 +150,8 @@ namespace ui::menu {
                 ImGui::Text("Target PID: %d", proc::pid);
                 ImGui::Text("FPS: %.1f", io.Framerate);
             }
-            // TAB 3: ABOUT & EXIT
-            else if (activeTab == 3) {
+            // TAB 2: ABOUT & EXIT
+            else if (activeTab == 2) {
                 ImGui::SeparatorText("About & Controls");
                 ImGui::Dummy(ImVec2(0, 5));
 
@@ -210,19 +185,10 @@ namespace ui::menu {
                 }
                 ImGui::Separator();
             };
-
-            if (floatAim) {
-                ImGui::SetNextWindowSize(winSize, ImGuiCond_Always);
-                ImGui::SetNextWindowPos(ImVec2(60, 240), ImGuiCond_FirstUseEver);
-                ImGui::Begin("##FloatAim", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
-                DrawHeader(" AIM LOCK ", &floatAim);
-                ToggleSwitch("##aimFloat", &cfg::aim::enable);
-                ImGui::End();
-            }
             
             if (floatESP) {
                 ImGui::SetNextWindowSize(winSize, ImGuiCond_Always);
-                ImGui::SetNextWindowPos(ImVec2(60, 360), ImGuiCond_FirstUseEver);
+                ImGui::SetNextWindowPos(ImVec2(60, 240), ImGuiCond_FirstUseEver);
                 ImGui::Begin("##FloatESP", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
                 DrawHeader(" ESP TRACER ", &floatESP);
                 ToggleSwitch("##espFloat", &cfg::esp::tracer);

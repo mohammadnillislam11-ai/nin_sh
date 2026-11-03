@@ -31,14 +31,4 @@ namespace esp {
     inline ImVec4 distance_col = ImVec4(0.95f, 0.95f, 0.30f, 1.0f);
     inline ImVec4 weapon_col   = ImVec4(1.0f, 0.85f, 0.30f, 1.0f);
 }
-
-namespace aim {
-    inline bool  enable       = false;
-    inline bool  show_fov     = true;
-    inline float fov_radius   = 120.f;
-    inline float smooth       = 5.0f;
-    inline int   target_bone  = 0; // 0 = Head, 1 = Neck/Chest
-    inline bool  target_knock = false;
-    inline bool  trigger_firing = false; // Only aim when firing
-}
 }

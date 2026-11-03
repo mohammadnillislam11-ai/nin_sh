@@ -2,7 +2,6 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
 #include "../game/data.hpp"
-#include "../game/AimTouch.hpp"
 #include "../ui/cfg.hpp"
 #include <cstdio>
 #include <cstring>
@@ -459,9 +458,5 @@ namespace func::esp {
 
         if (cfg::esp::loot)      drawLoot();
         if (cfg::esp::crosshair) drawCrosshair(dl);
-
-        // Render FOV Circle & update Aim
-        aim::render_fov(dl);
-        aim::update();
     }
 }

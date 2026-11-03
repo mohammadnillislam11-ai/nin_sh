@@ -3,7 +3,6 @@
 #include "ui/menu.hpp"
 #include "other/memory.hpp"
 #include "game/data.hpp"
-#include "game/AimSilent.h"
 #include "game/Offsets.h"
 #include "func/esp.hpp"
 #include <cstdio>
@@ -150,7 +149,7 @@ static int start_overlay() {
 
     // Start background scanner
     data::thread_start();
-    printf(FG_BGREEN "[+] Overlay & Safe Aim ready. Menu active.\n\n" RST);
+    printf(FG_BGREEN "[+] Overlay & ESP ready. Menu active.\n\n" RST);
     fflush(stdout);
 
     // ═══════════════════════════════════════════════════════

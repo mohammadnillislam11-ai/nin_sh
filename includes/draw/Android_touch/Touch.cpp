@@ -507,53 +507,13 @@ void Touch_Close() {
 }
 
 void Touch_Down(float xt, float yt) {
-    static int x, y;
-    x = 0, y = 0;
-    switch (orientation) {
-        case 1: {
-            x = screenHeight - yt;
-            y = xt;
-            break;
-        }                          
-        case 2: {
-            x = screenWidth - xt;
-            y = screenHeight - yt;
-            break;
-        }
-        case 3: {
-            y = screenWidth - xt;
-            x = yt;
-            break;
-        }
-        default: {
-            x = xt;
-            y = yt;
-            break;
-        }
-    }
-    touchObj &touch = Finger[0][9];
-    touch.id = 19;
-    touch.x = (int) (x * ::scale_x);
-    touch.y = (int) (y * ::scale_y);        
-    touch.isDown = true;
-    Upload();
+    // Touch injection completely disabled
 }
-/*
-void Touch_Down(float x, float y) {
-    touchObj &touch = Finger[0][9];
-    touch.id = 19;
-    touch.x = (int) (x * scale_x);
-    touch.y = (int) (y * scale_y);
-    touch.isDown = true;
-    Upload();
-}
-*/
+
 void Touch_Move(float x, float y) {
-    Touch_Down(x, y);
+    // Touch injection completely disabled
 }
 
 void Touch_Up() {
-    touchObj &touch = Finger[0][9];
-    touch.isDown = false;
-    Upload();
+    // Touch injection completely disabled
 }
