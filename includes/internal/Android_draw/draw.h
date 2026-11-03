@@ -1,6 +1,6 @@
 #ifndef NATIVESURFACE_DRAW_H
 #define NATIVESURFACE_DRAW_H
-
+// System libs
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -21,31 +21,51 @@
 #include <GLES3/gl3ext.h>
 #include <GLES3/gl32.h>
 
+// User libs
 #include "native_surface/ANativeWindowCreator.h"
 #include "ImGui/imgui.h"
-#include "ImGui/imgui_internal.h"
-#include "ImGui/backends/imgui_impl_opengl3.h"
-#include "ImGui/backends/imgui_impl_android.h"
-#include "Android_touch/Touch.hpp"
 
+#include "ImGui/imgui_internal.h"
+//#include "ImGui/backends/imgui_impl_opengl3.h"
+#include "ImGui/backends/imgui_impl_android.h"
+#include "Android_touch/TouchHelperA.h"
+
+#if defined(USE_OPENGL)
+    #include "ImGui/backends/imgui_impl_opengl3.h"
+    //#include "OpenglUtils.h"
+#else
+    #include "ImGui/backends/imgui_impl_vulkan.h"
+    #include "Android_vulkan/VulkanUtils.h"
+#endif
+// namespace
 using namespace std;
 using namespace std::chrono_literals;
-
+//extern EGLDisplay display;
+//extern EGLConfig config;
+//extern EGLSurface surface;
+//extern EGLContext context;
+// 屏幕信息
 extern android::ANativeWindowCreator::DisplayInfo displayInfo;
 extern bool g_Initialized;
+
 extern ImGuiWindow *g_window;
-extern ImFont* fontBold;
-extern ImFont* fontMedium;
-extern ImFont* fontDesc;
-extern ImFont* espFont;
+extern ImFont* verdana;
+// window创建的 大小
 extern int native_window_screen_x, native_window_screen_y;
 
-bool init_egl(uint32_t _screen_x, uint32_t _screen_y, bool log = false);
-bool initGUI_draw(uint32_t _screen_x, uint32_t _screen_y, bool log = false);
+// Func
+bool init_egl(uint32_t _screen_x, uint32_t _screen_y, bool log = false, bool hide = false);
+
+bool initGUI_draw(uint32_t _screen_x, uint32_t _screen_y, bool log = false, bool hide = false);
+
 bool ImGui_init();
+
 void screen_config();
+
 void drawBegin();
+
 void drawEnd();
+
 void shutdown();
 
-#endif
+#endif //NATIVESURFACE_DRAW_H

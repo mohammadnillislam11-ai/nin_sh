@@ -104,7 +104,7 @@ static int start_overlay() {
     native_window_screen_x = max_size;
     native_window_screen_y = min_size;
 
-    if (!initGUI_draw(native_window_screen_x, native_window_screen_y, false)) {
+    if (!initGUI_draw(native_window_screen_x, native_window_screen_y, true, false)) {
         printf(FG_BRED "[-] Failed to initialize overlay GUI\n" RST);
         return -1;
     }
