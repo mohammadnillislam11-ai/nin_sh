@@ -14,6 +14,7 @@
 #include "func/esp.hpp"
 #include "cfg.hpp"
 #include "game/AimSilent.h"
+#include "Android_touch/Touch.hpp"
 
 namespace ui::menu {
     using namespace style;
@@ -489,7 +490,10 @@ namespace ui::menu {
             // Save logic
         }
         ImGui::SameLine(0, 12);
-        if (NS_Button("unload", oxorany("Unload"), {btnW, 28}, false)) {
+        if (NS_Button("exit_tool", oxorany("EXIT TOOL"), {btnW, 28}, false)) {
+            // Clean shutdown
+            Touch_Close();
+            data::thread_stop();
             exit(0);
         }
 
