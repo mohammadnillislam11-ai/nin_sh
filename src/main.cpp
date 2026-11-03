@@ -37,6 +37,7 @@
 // ═══════════════════════════════════════════════════════════
 extern "C" void init_bypass();
 extern float global_anim_time;
+bool main_thread_flag = true;
 
 // ═══════════════════════════════════════════════════════════
 // TARGET GAME
@@ -156,7 +157,7 @@ static int start_overlay() {
     //  MAIN LOOP — MENU CHEAT + LIVE LOGS
     // ═══════════════════════════════════════════════════════
     int dbgCounter = 0;
-    while (true) {
+    while (main_thread_flag) {
         global_anim_time += 0.016f;
         drawBegin();
         ui::menu::render();
@@ -196,6 +197,10 @@ static int start_overlay() {
             fflush(stdout);
         }
     }
+
+    shutdown();
+    Touch_Close();
+    data::thread_stop();
     return 0;
 }
 

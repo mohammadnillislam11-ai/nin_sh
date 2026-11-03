@@ -49,7 +49,8 @@ static touchObj Finger[maxE][maxF];
 
 static int fdNum = 0, origfd[maxE], nowfd;
 
-static float scale_x, scale_y;
+static float scale_x = 1.0f, scale_y = 1.0f;
+static int touchMaxX = 0, touchMaxY = 0;
 
 static bool Touch_initialized = false;
 
@@ -271,12 +272,14 @@ static void *TypeA(void *arg) {
 bool Touch_Init(int w, int h, uint32_t orientation_, bool readOnly) {
     char temp[128];
     DIR *dir = opendir("/dev/input/");
+    if (!dir) return false;
     dirent *ptr = NULL;
     int eventCount = 0;
     while ((ptr = readdir(dir)) != NULL) {
         if (strstr(ptr->d_name, "event"))
             eventCount++;
     }
+    closedir(dir);
     struct input_absinfo abs, absX[maxE], absY[maxE];
     int fd, i, tmp1, tmp2;
     int screenX, screenY, minCnt = eventCount + 1;
@@ -407,8 +410,11 @@ bool Touch_Init(int w, int h, uint32_t orientation_, bool readOnly) {
     }
     //LOGD("fdNum %d", fdNum);
 
+    touchMaxX = screenX;
+    touchMaxY = screenY;
+
     ::screenWidth = w;
-    ::screenHeight = h, 
+    ::screenHeight = h; 
     ::orientation = orientation_;
     if (::orientation == 1 || ::orientation == 3) {
         ::scale_x = (float) screenX / h;
@@ -428,8 +434,17 @@ bool Touch_Init(int w, int h, uint32_t orientation_, bool readOnly) {
 }
 void UpdateScreenData(int w, int h, uint32_t orientation_) {
     ::screenWidth = w;
-    ::screenHeight = h, 
+    ::screenHeight = h; 
     ::orientation = orientation_;
+    if (touchMaxX > 0 && touchMaxY > 0 && w > 0 && h > 0) {
+        if (::orientation == 1 || ::orientation == 3) {
+            ::scale_x = (float) touchMaxX / (float)h;
+            ::scale_y = (float) touchMaxY / (float)w;
+        } else {
+            ::scale_x = (float) touchMaxX / (float)w;
+            ::scale_y = (float) touchMaxY / (float)h;    
+        }
+    }
 }
 
 

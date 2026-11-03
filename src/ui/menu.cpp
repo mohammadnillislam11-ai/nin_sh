@@ -187,8 +187,10 @@ namespace ui::menu {
 
                 ImGui::Dummy(ImVec2(0, 20)); 
                 if (ImGui::Button(" EXIT PANEL ", ImVec2(ImGui::GetContentRegionAvail().x, 45))) {
+                    main_thread_flag = false;
                     Touch_Close();
                     data::thread_stop();
+                    shutdown();
                     exit(0);
                 }
             }
