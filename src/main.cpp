@@ -62,41 +62,21 @@ static const char* GetTargetPackage() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// LAUNCH TARGET
+// WAIT FOR GAME (MANUAL LAUNCH)
 // ═══════════════════════════════════════════════════════════
-static bool launch_target_silent() {
-    pid_t pid = fork();
-    if (pid < 0) return false;
-    if (pid == 0) {
-        execl("/system/bin/am", "am", "start", "-n",
-              GetTargetActivity(), (char*)nullptr);
-        _exit(127);
-    }
-    int status = 0;
-    waitpid(pid, &status, 0);
-    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
-}
+static int wait_for_game() {
+    printf(FG_BCYAN "\n  [1/4] " RST FG_BWHITE "Waiting for Free Fire to open manually...\n" RST);
+    printf(FG_BYELLOW "        Please open Free Fire on your device (terminal will detect automatically).\n" RST);
+    fflush(stdout);
 
-// ═══════════════════════════════════════════════════════════
-// ATTACH / LAUNCH
-// ═══════════════════════════════════════════════════════════
-static int attach_or_launch() {
-    proc::pid = get_pid();
-    if (proc::pid > 0) {
-        LOGI("[+] Already running, pid=%d", proc::pid);
-        return proc::pid;
-    }
-    LOGI("[+] Launching %s...", GetTargetPackage());
-    launch_target_silent();
-    for (int i = 0; i < 120; i++) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    while (true) {
         proc::pid = get_pid();
-        if (proc::pid > 0) {
-            LOGI("[+] Attached, pid=%d", proc::pid);
-            return proc::pid;
-        }
+        if (proc::pid > 0) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(800));
     }
-    return -1;
+    printf(FG_BGREEN "  [✓] Game process detected! PID: " FG_BYELLOW "%d\n" RST, proc::pid);
+    fflush(stdout);
+    return proc::pid;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -152,17 +132,49 @@ static int start_overlay() {
     printf(FG_BBLUE "  [2/3] " RST FG_BWHITE "Init bypass...\n" RST);
     init_bypass();
 
-    // ─── ATTACH KE GAME ───
-    printf(FG_BBLUE "  [3/3] " RST FG_BWHITE "Attaching to " FG_BYELLOW "%s" FG_BWHITE "...\n" RST,
-           GetTargetPackage());
-
-    if (attach_or_launch() <= 0) {
-        printf(FG_BRED "  [!] Gagal attach\n" RST);
+    // ─── ATTACH KE GAME (MANUAL OPEN) ───
+    if (wait_for_game() <= 0) {
+        printf(FG_BRED "  [!] Failed to detect game process\n" RST);
         return -1;
     }
 
-    proc::lib = get_lib();
-    printf(FG_BGREEN "  [✓] Attached! PID: " FG_BYELLOW "%d\n" RST, proc::pid);
+    printf(FG_BCYAN "  [2/4] " RST FG_BWHITE "Waiting for libil2cpp.so to load in memory...\n" RST);
+    fflush(stdout);
+
+    int waitCount = 0;
+    while (true) {
+        proc::lib = get_lib();
+        if (proc::lib > 0) break;
+
+        // Check if game process exited
+        if (get_pid() <= 0) {
+            printf(FG_BRED "\n  [!] Game process closed. Waiting for game to re-open...\n" RST);
+            while (true) {
+                proc::pid = get_pid();
+                if (proc::pid > 0) break;
+                std::this_thread::sleep_for(std::chrono::milliseconds(800));
+            }
+            printf(FG_BGREEN "  [✓] Game process re-detected! PID: %d\n" RST, proc::pid);
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        waitCount++;
+        if (waitCount % 3 == 0) {
+            printf(FG_BYELLOW "        ...waiting for libil2cpp.so (%ds)\n" RST, waitCount);
+            fflush(stdout);
+        }
+    }
+
+    printf(FG_BGREEN "  [✓] libil2cpp.so loaded! Base: " FG_BYELLOW "0x%lx\n" RST, (unsigned long)proc::lib);
+
+    // Verify memory read
+    uint32_t elfMagic = rpm<uint32_t>(proc::lib);
+    if (elfMagic == 0x464C457F) {
+        printf(FG_BGREEN "  [✓] Process memory access: OK (ELF magic verified)\n" RST);
+    } else {
+        printf(FG_BYELLOW "  [!] Warning: Memory read test returned 0x%08X (Check root/SELinux)\n" RST, elfMagic);
+    }
+    fflush(stdout);
 
     // ═══════════════════════════════════════════════════════
     //  INIT AIM SILENT HOOK (DEBUG)
@@ -187,16 +199,15 @@ static int start_overlay() {
 
     // ─── START DATA THREAD ───
     data::thread_start();
-    printf(FG_BGREEN "  [✓] Data thread started\n" RST);
+    printf(FG_BGREEN "  [✓] Data scanner thread started\n" RST);
     fflush(stdout);
 
-    printf(FG_BGREEN BOLD "  ⭐ Overlay Started! ⭐\n" RST);
-    printf(FG_BCYAN "  [INFO] Toggle Aim Silent di menu > tab ESP\n" RST);
-    printf(FG_BCYAN "  [INFO] Masuk match, tembak musuh, cek log\n" RST);
+    printf(FG_BGREEN BOLD "  ⭐ Overlay & Scanner Active! ⭐\n" RST);
+    printf(FG_BCYAN "  [INFO] Real-time scanner logs will display below:\n" RST);
     fflush(stdout);
 
     // ═══════════════════════════════════════════════════════
-    //  MAIN LOOP — MENU CHEAT + DEBUG
+    //  MAIN LOOP — MENU CHEAT + LIVE LOGS
     // ═══════════════════════════════════════════════════════
     int dbgCounter = 0;
     while (true) {
@@ -206,22 +217,36 @@ static int start_overlay() {
         drawEnd();
         usleep(16000);
 
-        // ─── DEBUG LOG TIAP 5 DETIK ───
-        if (++dbgCounter >= 300) {  // ~5 detik (60 FPS * 5)
+        // ─── REAL-TIME SCANNER LOG (Every ~3 seconds at 60 FPS) ───
+        if (++dbgCounter >= 180) {
             dbgCounter = 0;
 
+            bool inM = data::inMatch.load(std::memory_order_relaxed);
             size_t nPlayers = 0;
             {
                 std::lock_guard<std::mutex> lk(data::players_mutex);
                 nPlayers = data::players.size();
             }
 
-            printf(FG_BCYAN "[DBG] " RST
-                   "inMatch=%d | players=%zu | aim=%d | nobita=%d\n",
-                   (int)data::inMatch.load(std::memory_order_relaxed),
-                   nPlayers,
-                   (int)AimSilentEnabled,
-                   (int)AimSilentNobita);
+            if (inM) {
+                printf(FG_BGREEN "[MATCH ACTIVE] " RST
+                       FG_BWHITE "Enemies: " FG_BYELLOW "%zu" RST
+                       FG_BWHITE " | LocalPlayer: " FG_BCYAN "0x%lx" RST
+                       FG_BWHITE " | Tracer: " FG_BGREEN "%s" RST
+                       FG_BWHITE " | Box: " FG_BGREEN "%s" RST "\n",
+                       nPlayers,
+                       (unsigned long)data::localPlayerAddr.load(std::memory_order_relaxed),
+                       cfg::esp::tracer ? "ON" : "OFF",
+                       cfg::esp::box ? "ON" : "OFF");
+            } else {
+                printf(FG_BYELLOW "[LOBBY] " RST
+                       FG_BWHITE "Waiting for Match | Lib: " FG_BCYAN "0x%lx" RST
+                       FG_BWHITE " | PID: " FG_BYELLOW "%d" RST
+                       FG_BWHITE " | Tracer: " FG_BWHITE "%s" RST "\n",
+                       (unsigned long)proc::lib,
+                       proc::pid,
+                       cfg::esp::tracer ? "ON" : "OFF");
+            }
             fflush(stdout);
         }
     }

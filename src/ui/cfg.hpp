@@ -12,7 +12,7 @@ namespace esp {
     inline bool  distance     = true;
     inline bool  weapon       = true;
     inline bool  bot_tag      = true;
-    inline bool  tracer       = false;
+    inline bool  tracer       = true;
     inline bool  crosshair    = true;
     inline bool  firing_ind   = true;
     inline bool  loot         = false;
