@@ -24,10 +24,25 @@ jobs:
 
       - name: Build with ndk-build
         run: |
+          set -o pipefail
           echo "Starting ndk-build..."
-          ndk-build NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=jni/Android.mk NDK_APPLICATION_MK=jni/Application.mk -j$(nproc)
+          if ! ndk-build NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=jni/Android.mk NDK_APPLICATION_MK=jni/Application.mk -j$(nproc) 2>&1 | tee build.log; then
+            echo "=== NDK BUILD FAILED ==="
+            grep -E "error:" build.log | head -n 30 | while read -r errline; do
+              echo "::error title=NDK Error::$errline"
+            done
+            tail -n 120 build.log
+            exit 1
+          fi
           echo "Build finished. Checking output..."
           ls -la libs/arm64-v8a/
+
+      - name: Upload Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-failure-log
+          path: build.log
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
