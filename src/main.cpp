@@ -111,8 +111,6 @@ static int start_overlay() {
 
     Touch_Init(displayInfo.width, displayInfo.height, displayInfo.orientation, true);
 
-    init_bypass();
-
     // ─── ATTACH KE GAME (MANUAL OPEN) ───
     if (wait_for_game() <= 0) {
         printf(FG_BRED "[-] Game process detection aborted\n" RST);

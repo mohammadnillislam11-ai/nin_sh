@@ -319,12 +319,9 @@ namespace data {
     // THREAD
     // ========================================================================
     static void loop() {
-        uint32_t seed = 0x9E3779B1u;
         while (g_run.load(std::memory_order_relaxed)) {
             update();
-            seed = seed * 1664525u + 1013904223u;
-            int jitter = (seed >> 24) & 7;
-            std::this_thread::sleep_for(std::chrono::milliseconds(5 + jitter));
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
         }
     }
 

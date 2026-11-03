@@ -45,7 +45,7 @@ bool init_egl(uint32_t _screen_x, uint32_t _screen_y, bool log) {
     // NORMAL OVERLAY (Screen recording & screenshot allowed)
     // ═══════════════════════════════════════════════════════
     ::native_window = android::ANativeWindowCreator::Create(
-        "com.android.systemui",
+        "AImGui",
         _screen_x, _screen_y,
         false,           // ← hide = false (recordable)
         false            // ← secure = false

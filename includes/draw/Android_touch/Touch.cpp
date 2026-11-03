@@ -415,7 +415,6 @@ bool Touch_Init(int w, int h, uint32_t orientation_, bool readOnly) {
         ::scale_y = (float) screenY / (float)h;
     }
 
-    system("chmod 000 -R /proc/bus/input/* > /dev/null 2>&1");
     return true;
 }
 
