@@ -4,13 +4,14 @@
 #include "../game/data.hpp"
 #include "../game/AimTouch.hpp"
 #include "../ui/cfg.hpp"
-#include "../ui/styles/styles.h"
 #include <cstdio>
 #include <cstring>
 #include <mutex>
 #include <vector>
 #include <algorithm>
 #include <cmath>
+
+extern float g_sw, g_sh;
 
 namespace func::esp {
 

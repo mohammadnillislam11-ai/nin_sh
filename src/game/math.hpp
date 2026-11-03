@@ -4,8 +4,9 @@
 #include "Offsets.h"
 #include "../other/vector3.h"
 #include "../other/memory.hpp"
-#include "styles/styles.h"     // g_sw / g_sh
 #include <cmath>
+
+extern float g_sw, g_sh;
 
 inline Vector3 GetPosition(uint64_t Transform) {
     auto transformObjValue = rpm<uint64_t>(Transform + 0x10);
