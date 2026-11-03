@@ -150,10 +150,9 @@ static int start_overlay() {
     }
     fflush(stdout);
 
-    InitAimSilentHook();
-
+    // Start background scanner
     data::thread_start();
-    printf(FG_BGREEN "[+] Overlay active. Menu ready.\n\n" RST);
+    printf(FG_BGREEN "[+] Overlay & Safe Aim ready. Menu active.\n\n" RST);
     fflush(stdout);
 
     // ═══════════════════════════════════════════════════════

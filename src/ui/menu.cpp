@@ -372,19 +372,22 @@ namespace ui::menu {
         ImGui::SetCursorScreenPos({cp.x, cp.y+card1H+12});
         ImGui::Dummy({0,0});
 
-        // ── Card 2: Aim Silent ──
-        float cardAimH = 130.f;
+        // ── Card 2: Aim Lock (Non-Invasive Safe Aim) ──
+        float cardAimH = 175.f;
         ImVec2 cpAim = ImGui::GetCursorScreenPos();
         NS_CardBegin(dl, cpAim, cw, cardAimH);
-        NS_CardTitle(dl, {cpAim.x+16, cpAim.y+14}, oxorany("Aim Silent"), "AimBot");
+        NS_CardTitle(dl, {cpAim.x+16, cpAim.y+14}, oxorany("Aim Lock"), "Safe Aim");
         ImGui::SetCursorScreenPos({cpAim.x+16, cpAim.y+44});
 
-        NS_Toggle("aim_silent",  oxorany("Aim Silent"),  &AimSilentEnabled);
-        NS_Toggle("aim_nobita",  oxorany("Nobita Mode"), &AimSilentNobita);
+        NS_Toggle("aim_enable",      oxorany("Aim Lock (Safe)"), &cfg::aim::enable);
+        NS_Toggle("aim_show_fov",    oxorany("Show FOV Circle"), &cfg::aim::show_fov);
+        NS_Toggle("aim_on_fire",     oxorany("Aim On Firing"),   &cfg::aim::trigger_firing);
+        NS_Slider("aim_fov_sz",      oxorany("FOV Size"),        &cfg::aim::fov_radius, 40.f, 350.f, "px");
+        NS_Slider("aim_smooth",      oxorany("Smoothness"),      &cfg::aim::smooth,     1.f,  15.f, "");
 
         // Status
         {
-            bool active = AimSilentEnabled || AimSilentNobita;
+            bool active = cfg::aim::enable;
             char st[64];
             snprintf(st, sizeof(st), "%s", active ? "ACTIVE" : "INACTIVE");
             ImU32 stCol = active ? C_Success() : C_TextDim();
