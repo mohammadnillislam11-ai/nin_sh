@@ -35,71 +35,63 @@ namespace ui::bar {
     }
 
     static void render_fps_icon(float alpha) {
-        const float w = 128.f, h = 56.f;
+        const float w = 105.f, h = 38.f;
         get_fps_pos(w, h);
 
-        ImDrawList* dl = ImGui::GetForegroundDrawList();
-        ImVec2 mp = ImGui::GetMousePos();
-        bool hov = (mp.x >= g_fps_x && mp.x <= g_fps_x + w &&
-                    mp.y >= g_fps_y && mp.y <= g_fps_y + h);
+        ImGui::SetNextWindowPos(ImVec2(g_fps_x, g_fps_y), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(w, h), ImGuiCond_Always);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.f);
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0,0,0,0));
 
-        // Detect drag start
-        if (hov && ImGui::IsMouseClicked(0)) {
-            g_fps_potential = true;
-            g_fps_down = mp;
-            g_fps_off = ImVec2(mp.x - g_fps_x, mp.y - g_fps_y);
+        ImGui::Begin("##FloatingLogo", nullptr,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground |
+            ImGuiWindowFlags_NoSavedSettings);
+
+        ImVec2 wp = ImGui::GetWindowPos();
+        ImGui::InvisibleButton("##fps_drag", ImVec2(w, h));
+        bool active = ImGui::IsItemActive();
+
+        if (active && ImGui::IsMouseDragging(0, 3.0f)) {
+            g_fps_drag = true;
+            ImVec2 delta = ImGui::GetIO().MouseDelta;
+            g_fps_x += delta.x;
+            g_fps_y += delta.y;
+            get_fps_pos(w, h);
         }
 
-        // Drag
-        if (g_fps_potential && ImGui::IsMouseDown(0)) {
-            float dx = mp.x - g_fps_down.x;
-            float dy = mp.y - g_fps_down.y;
-            if (g_fps_drag || (dx*dx + dy*dy) > (FPS_DRAG_THRESHOLD * FPS_DRAG_THRESHOLD)) {
-                g_fps_drag = true;
-                g_fps_x = mp.x - g_fps_off.x;
-                g_fps_y = mp.y - g_fps_off.y;
-                get_fps_pos(w, h);
-            }
-        }
-
-        // Release → click = buka menu
-        if (ImGui::IsMouseReleased(0)) {
-            if (g_fps_potential && !g_fps_drag) {
+        if (ImGui::IsItemDeactivated()) {
+            if (!g_fps_drag) {
                 g_open = true;
             }
-            g_fps_potential = false;
             g_fps_drag = false;
         }
 
+        ImDrawList* dl = ImGui::GetWindowDrawList();
         float fps = ImGui::GetIO().Framerate;
 
-        ImU32 bg_col     = IM_COL32(8, 8, 10, (int)(230 * alpha));
-        ImU32 border_col = g_fps_drag ? col(UITheme::accent_light, alpha)
-                                      : col(UITheme::border, alpha);
+        ImU32 bg_col     = IM_COL32(12, 12, 16, (int)(240 * alpha));
+        ImU32 border_col = (active || g_fps_drag) ? col(UITheme::accent_light, alpha)
+                                                 : col(UITheme::border, alpha);
 
         // Background pill
         float pillR = h * 0.5f;
-        dl->AddRectFilled({g_fps_x + 2, g_fps_y + 3}, {g_fps_x + w + 2, g_fps_y + h + 3},
-                          IM_COL32(0, 0, 0, (int)(60 * alpha)), pillR);
-        dl->AddRectFilled({g_fps_x, g_fps_y}, {g_fps_x + w, g_fps_y + h},
-                          bg_col, pillR);
-        dl->AddRect({g_fps_x, g_fps_y}, {g_fps_x + w, g_fps_y + h},
-                    border_col, pillR, 0, g_fps_drag ? 2.f : 1.2f);
+        dl->AddRectFilled({wp.x + 2, wp.y + 2}, {wp.x + w + 2, wp.y + h + 2},
+                          IM_COL32(0, 0, 0, (int)(70 * alpha)), pillR);
+        dl->AddRectFilled(wp, {wp.x + w, wp.y + h}, bg_col, pillR);
+        dl->AddRect(wp, {wp.x + w, wp.y + h}, border_col, pillR, 0, g_fps_drag ? 1.8f : 1.0f);
 
-        // Accent strip kiri
-        dl->AddRectFilled({g_fps_x + 4.f, g_fps_y + 4.f},
-                          {g_fps_x + 7.f, g_fps_y + h - 4.f},
-                          col(UITheme::accent, alpha), 2.f);
+        // Accent strip left
+        dl->AddRectFilled({wp.x + 4.f, wp.y + 5.f},
+                          {wp.x + 6.5f, wp.y + h - 5.f},
+                          col(UITheme::accent, alpha), 1.5f);
 
-        // ============================================
-        // LOGO 'N' (Dynamic Vector Badge)
-        // ============================================
-        float cx = g_fps_x + 30.f, cy = g_fps_y + h * 0.5f, radius = 17.f;
+        // Vector 'N' Logo
+        float cx = wp.x + 20.f, cy = wp.y + h * 0.5f, radius = 12.f;
         UITheme::DrawNLogo(dl, ImVec2(cx, cy), radius, alpha);
 
-        // ============================================
-        // FPS TEXT
-        // ============================================
+        // FPS Text
         int fpsInt = (int)(fps + 0.5f);
         char buf[16];
         snprintf(buf, sizeof(buf), "%d FPS", fpsInt);
@@ -109,10 +101,14 @@ namespace ui::bar {
             ImU32 text_col = fps >= 50.f ? IM_COL32(52, 199, 89, 255)
                             : fps >= 30.f ? IM_COL32(255, 180, 40, 255)
                                           : IM_COL32(255, 69, 58, 255);
-            dl->AddText(font, 18.f,
-                        {g_fps_x + 56.f, g_fps_y + (h - 18.f) * 0.5f},
+            dl->AddText(font, 13.f,
+                        {wp.x + 38.f, wp.y + (h - 13.f) * 0.5f},
                         text_col, buf);
         }
+
+        ImGui::End();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar(2);
     }
 
     // ============================================

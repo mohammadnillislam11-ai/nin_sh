@@ -505,7 +505,7 @@ namespace ui::menu {
         ma = ma + ((bar::g_open ? 1.f : 0.f) - ma) * ImClamp(12.f*dt, 0.f, 1.f);
 
         if (ma > 0.01f) {
-            int da = (int)(200*ma*bar::game_alpha());
+            int da = (int)(90*ma*bar::game_alpha());
             ImGui::GetBackgroundDrawList()->AddRectFilled({0,0},{g_sw,g_sh},IM_COL32(0,0,0,da));
         }
         if (ma < 0.01f) return;
@@ -554,25 +554,15 @@ namespace ui::menu {
         const float sidebarW = 105.f;
         const float footerH = 26.f;
 
-        // Smooth header drag to slide/move window
-        static bool menu_dragging = false;
-        static ImVec2 menu_drag_offset(0.f, 0.f);
-        bool header_hovered = (mp.x >= wp.x && mp.x <= (wp.x + ws.x - 45.f) &&
-                               mp.y >= wp.y && mp.y <= (wp.y + headerH));
-
-        if (header_hovered && ImGui::IsMouseClicked(0)) {
-            menu_dragging = true;
-            menu_drag_offset = ImVec2(mp.x - g_menu_pos.x, mp.y - g_menu_pos.y);
-        }
-        if (menu_dragging) {
-            if (ImGui::IsMouseDown(0)) {
-                g_menu_pos.x = mp.x - menu_drag_offset.x;
-                g_menu_pos.y = mp.y - menu_drag_offset.y;
-                if (g_sw > wsz.x) g_menu_pos.x = ImClamp(g_menu_pos.x, 0.f, g_sw - wsz.x);
-                if (g_sh > wsz.y) g_menu_pos.y = ImClamp(g_menu_pos.y, 0.f, g_sh - wsz.y);
-            } else {
-                menu_dragging = false;
-            }
+        // Smooth header drag to slide/move window (ImGui item-active tracking)
+        ImGui::SetCursorScreenPos(wp);
+        ImGui::InvisibleButton("##menu_hdr_drag", ImVec2(ws.x - 36.f, headerH));
+        if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0, 2.0f)) {
+            ImVec2 delta = ImGui::GetIO().MouseDelta;
+            g_menu_pos.x += delta.x;
+            g_menu_pos.y += delta.y;
+            if (g_sw > wsz.x) g_menu_pos.x = ImClamp(g_menu_pos.x, 0.f, g_sw - wsz.x);
+            if (g_sh > wsz.y) g_menu_pos.y = ImClamp(g_menu_pos.y, 0.f, g_sh - wsz.y);
         }
 
         bg->AddRectFilled(wp, {wp.x+ws.x, wp.y+headerH},

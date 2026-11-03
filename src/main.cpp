@@ -83,20 +83,7 @@ static int wait_for_game() {
 // BANNER
 // ═══════════════════════════════════════════════════════════
 static void print_banner() {
-    printf("\n");
-    printf(FG_BRED BOLD);
-    printf("  ███╗   ██╗██╗███╗   ██╗███╗   ███╗ ██████╗ ██████╗ ███████╗\n");
-    printf("  ████╗  ██║██║████╗  ██║████╗ ████║██╔═══██╗██╔══██╗██╔════╝\n");
-    printf("  ██╔██╗ ██║██║██╔██╗ ██║██╔████╔██║██║   ██║██║  ██║███████╗\n");
-    printf("  ██║╚██╗██║██║██║╚██╗██║██║╚██╔╝██║██║   ██║██║  ██║╚════██║\n");
-    printf("  ██║ ╚████║██║██║ ╚████║██║ ╚═╝ ██║╚██████╔╝██████╔╝███████║\n");
-    printf("  ╚═╝  ╚═══╝╚═╝╚═╝  ╚═══╝╚═╝     ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝\n");
-    printf(RST);
-    printf(FG_BCYAN BOLD "  ╔═══════════════════════════════════════════════╗\n" RST);
-    printf(FG_BCYAN "  ║" RST FG_BYELLOW BOLD "        ninmods PROJECT — FREE FIRE         " RST FG_BCYAN "║\n" RST);
-    printf(FG_BCYAN "  ║" RST FG_BGREEN "              v1.0 VIP EDITION                 " RST FG_BCYAN "║\n" RST);
-    printf(FG_BCYAN "  ╚═══════════════════════════════════════════════╝\n" RST);
-    printf("\n");
+    printf(FG_BCYAN BOLD "\n  >> ninmods External Panel | Free Fire VIP <<\n\n" RST);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -104,9 +91,6 @@ static void print_banner() {
 // ═══════════════════════════════════════════════════════════
 static int start_overlay() {
     LOGI("=== ninmods starting ===");
-
-    // ─── INIT GUI ───
-    printf(FG_BBLUE "  [1/3] " RST FG_BWHITE "Init GUI...\n" RST);
 
     screen_config();
 
@@ -120,90 +104,56 @@ static int start_overlay() {
     native_window_screen_x = max_size;
     native_window_screen_y = min_size;
 
-    if (!initGUI_draw(native_window_screen_x, native_window_screen_y, true)) {
-        printf(FG_BRED "  [!] initGUI FAILED!\n" RST);
+    if (!initGUI_draw(native_window_screen_x, native_window_screen_y, false)) {
+        printf(FG_BRED "[-] Failed to initialize overlay GUI\n" RST);
         return -1;
     }
-    printf(FG_BGREEN "  [✓] GUI ready\n" RST);
 
     Touch_Init(displayInfo.width, displayInfo.height, displayInfo.orientation, true);
 
-    // ─── BYPASS ───
-    printf(FG_BBLUE "  [2/3] " RST FG_BWHITE "Init bypass...\n" RST);
     init_bypass();
 
     // ─── ATTACH KE GAME (MANUAL OPEN) ───
     if (wait_for_game() <= 0) {
-        printf(FG_BRED "  [!] Failed to detect game process\n" RST);
+        printf(FG_BRED "[-] Game process detection aborted\n" RST);
         return -1;
     }
 
-    printf(FG_BCYAN "  [2/4] " RST FG_BWHITE "Waiting for libil2cpp.so to load in memory...\n" RST);
+    printf(FG_BWHITE "[*] Waiting for libil2cpp.so to load...\n" RST);
     fflush(stdout);
 
-    int waitCount = 0;
     while (true) {
         proc::lib = get_lib();
         if (proc::lib > 0) break;
 
-        // Check if game process exited
         if (get_pid() <= 0) {
-            printf(FG_BRED "\n  [!] Game process closed. Waiting for game to re-open...\n" RST);
+            printf(FG_BYELLOW "[*] Game closed. Waiting for relaunch...\n" RST);
             while (true) {
                 proc::pid = get_pid();
                 if (proc::pid > 0) break;
                 std::this_thread::sleep_for(std::chrono::milliseconds(800));
             }
-            printf(FG_BGREEN "  [✓] Game process re-detected! PID: %d\n" RST, proc::pid);
+            printf(FG_BGREEN "[+] Game re-detected (PID: %d)\n" RST, proc::pid);
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        waitCount++;
-        if (waitCount % 3 == 0) {
-            printf(FG_BYELLOW "        ...waiting for libil2cpp.so (%ds)\n" RST, waitCount);
-            fflush(stdout);
-        }
     }
 
-    printf(FG_BGREEN "  [✓] libil2cpp.so loaded! Base: " FG_BYELLOW "0x%lx\n" RST, (unsigned long)proc::lib);
+    printf(FG_BGREEN "[+] libil2cpp.so loaded: " FG_BYELLOW "0x%lx\n" RST, (unsigned long)proc::lib);
 
     // Verify memory read
     uint32_t elfMagic = rpm<uint32_t>(proc::lib);
     if (elfMagic == 0x464C457F) {
-        printf(FG_BGREEN "  [✓] Process memory access: OK (ELF magic verified)\n" RST);
+        printf(FG_BGREEN "[+] Process memory read: OK\n" RST);
     } else {
-        printf(FG_BYELLOW "  [!] Warning: Memory read test returned 0x%08X (Check root/SELinux)\n" RST, elfMagic);
+        printf(FG_BYELLOW "[!] Warning: Memory read returned 0x%08X (Check root permissions)\n" RST, elfMagic);
     }
-    fflush(stdout);
-
-    // ═══════════════════════════════════════════════════════
-    //  INIT AIM SILENT HOOK (DEBUG)
-    // ═══════════════════════════════════════════════════════
-    printf(FG_BBLUE "  [~] " RST FG_BWHITE "Init Aim Silent Hook...\n" RST);
-
-    printf(FG_BYELLOW "  [DEBUG] lib base       = 0x%lx\n" RST, (unsigned long)proc::lib);
-    printf(FG_BYELLOW "  [DEBUG] RVA TakeDamage_9 = 0x%lx\n" RST, (unsigned long)Offsets::Player_TakeDamage_9);
-    printf(FG_BYELLOW "  [DEBUG] RVA TakeDamage_4 = 0x%lx\n" RST, (unsigned long)Offsets::Player_TakeDamage_4);
-    printf(FG_BYELLOW "  [DEBUG] RVA HeadCollider = 0x%lx\n" RST, (unsigned long)Offsets::Player_get_HeadCollider);
-    printf(FG_BYELLOW "  [DEBUG] Hook addr 9    = 0x%lx\n" RST, (unsigned long)(proc::lib + Offsets::Player_TakeDamage_9));
-    printf(FG_BYELLOW "  [DEBUG] Hook addr 4    = 0x%lx\n" RST, (unsigned long)(proc::lib + Offsets::Player_TakeDamage_4));
-    printf(FG_BYELLOW "  [DEBUG] Hook addr HC   = 0x%lx\n" RST, (unsigned long)(proc::lib + Offsets::Player_get_HeadCollider));
     fflush(stdout);
 
     InitAimSilentHook();
 
-    printf(FG_BGREEN "  [✓] Aim Silent Hook installed\n" RST);
-    printf(FG_BYELLOW "  [DEBUG] AimSilentEnabled = %d\n" RST, (int)AimSilentEnabled);
-    printf(FG_BYELLOW "  [DEBUG] AimSilentNobita  = %d\n" RST, (int)AimSilentNobita);
-    fflush(stdout);
-
-    // ─── START DATA THREAD ───
     data::thread_start();
-    printf(FG_BGREEN "  [✓] Data scanner thread started\n" RST);
-    fflush(stdout);
-
-    printf(FG_BGREEN BOLD "  ⭐ Overlay & Scanner Active! ⭐\n" RST);
-    printf(FG_BCYAN "  [INFO] Real-time scanner logs will display below:\n" RST);
+    printf(FG_BGREEN "[+] Overlay active. Menu ready.\n\n" RST);
     fflush(stdout);
 
     // ═══════════════════════════════════════════════════════
