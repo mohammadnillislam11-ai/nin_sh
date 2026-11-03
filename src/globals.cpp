@@ -3,4 +3,6 @@
 
 float global_anim_time = 0.0f;
 float g_ui_scale = 1.0f;
+float g_sw = 1920.0f;
+float g_sh = 1080.0f;
 std::atomic<bool> menu_visible{false};
