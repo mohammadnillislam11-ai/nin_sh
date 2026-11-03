@@ -20,7 +20,7 @@ namespace aim {
         if (!data::inMatch.load(std::memory_order_relaxed)) return;
 
         uint64_t localPlayer = data::localPlayerAddr.load(std::memory_order_relaxed);
-        if (!localPlayer) return;
+        if (!localPlayer || localPlayer < 0x10000000) return;
 
         // Check trigger condition
         if (cfg::aim::trigger_firing) {
@@ -67,31 +67,40 @@ namespace aim {
 
         if (!bestTarget) return;
 
-        // Vector delta towards enemy
+        // Vector delta towards enemy on screen
         float deltaX = targetScreenPos.x - screenCx;
         float deltaY = targetScreenPos.y - screenCy;
 
-        // Smooth factor
+        // Smooth factor (higher = smoother / less snap)
         float smoothVal = ImClamp(cfg::aim::smooth, 1.0f, 20.0f);
         float stepX = deltaX / smoothVal;
         float stepY = deltaY / smoothVal;
 
-        // Max single-frame step to prevent jitter
+        // Clamp step to prevent jitter
         stepX = ImClamp(stepX, -25.0f, 25.0f);
         stepY = ImClamp(stepY, -25.0f, 25.0f);
 
-        // Apply aim to camera rotation in memory (Safe process_vm_write, no hook)
-        // Free Fire camera matrix / rotation:
-        uint64_t cameraFollow = rpm<uint64_t>(localPlayer + Offsets::Player_Camera);
-        if (cameraFollow) {
-            // Write to Player Rotation if available
-            uint64_t rotAddr = localPlayer + Offsets::Player_Rotation;
-            if (rotAddr > 0x1000) {
-                Vector3 curRot = rpm<Vector3>(rotAddr);
-                // Adjust yaw and pitch based on delta
-                curRot.x += stepY * 0.08f; // Pitch
-                curRot.y += stepX * 0.08f; // Yaw
+        // Safe aim adjustment via Player rotation fields if valid
+        uint64_t rotAddr = localPlayer + Offsets::Player_Rotation;
+        if (rotAddr > 0x10000000) {
+            Vector3 curRot = rpm<Vector3>(rotAddr);
+            if (std::isfinite(curRot.x) && std::isfinite(curRot.y)) {
+                curRot.x += stepY * 0.06f; // Pitch
+                curRot.y += stepX * 0.06f; // Yaw
                 wpm<Vector3>(rotAddr, curRot);
+            }
+        }
+
+        // AimInfo Direction fallback for shot line alignment
+        uint64_t aimInfo = rpm<uint64_t>(localPlayer + Offsets::Player_AimInfo);
+        if (aimInfo > 0x10000000) {
+            Vector3 aimDir = rpm<Vector3>(aimInfo + Offsets::AimInfo_Direction);
+            if (std::isfinite(aimDir.x) && std::isfinite(aimDir.y) && std::isfinite(aimDir.z)) {
+                // Align direction vector gradually
+                aimDir.x += (stepX * 0.002f);
+                aimDir.y -= (stepY * 0.002f);
+                aimDir = Vector3::Normalize(aimDir);
+                wpm<Vector3>(aimInfo + Offsets::AimInfo_Direction, aimDir);
             }
         }
     }
@@ -104,7 +113,7 @@ namespace aim {
         float cy = g_sh * 0.5f;
         float r  = cfg::aim::fov_radius;
 
-        dl->AddCircle(ImVec2(cx, cy), r, IM_COL32(255, 255, 255, 80), 64, 1.0f);
-        dl->AddCircle(ImVec2(cx, cy), r + 1.0f, IM_COL32(255, 60, 60, 160), 64, 1.2f);
+        dl->AddCircle(ImVec2(cx, cy), r, IM_COL32(255, 255, 255, 60), 64, 1.0f);
+        dl->AddCircle(ImVec2(cx, cy), r + 1.0f, IM_COL32(255, 50, 70, 140), 64, 1.2f);
     }
 }
