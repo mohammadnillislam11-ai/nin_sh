@@ -1,17 +1,6 @@
 LOCAL_PATH := $(call my-dir)
 
 # ============================================================
-# ShadowHook — static
-# ============================================================
-include $(CLEAR_VARS)
-LOCAL_MODULE := libshadowhook
-LOCAL_SRC_FILES := ../src/shadowhook/libshadowhook.a
-LOCAL_MODULE_CLASS := STATIC_LIBRARIES
-LOCAL_MODULE_SUFFIX := .a
-LOCAL_MODULE_TAGS := optional
-include $(PREBUILT_STATIC_LIBRARY)
-
-# ============================================================
 # MAIN MODULE — client.sh
 # ============================================================
 include $(CLEAR_VARS)
@@ -24,8 +13,7 @@ LOCAL_MODULE := client.sh
 LOCAL_SRC_FILES := $(filter-out \
     ../includes/draw/ImGui/imgui_demo.cpp \
     ../includes/draw/ImGui/backends/imgui_impl_vulkan.cpp \
-    ../includes/draw/ImGui/stb_image.cpp \
-    ../src/shadowhook/libshadowhook.a, \
+    ../includes/draw/ImGui/stb_image.cpp, \
     $(patsubst $(LOCAL_PATH)/%,%,$(shell find $(LOCAL_PATH)/../src -name "*.cpp")) \
     $(patsubst $(LOCAL_PATH)/%,%,$(shell find $(LOCAL_PATH)/../includes/draw -name "*.cpp")))
 
@@ -52,7 +40,6 @@ LOCAL_C_INCLUDES := \
     $(LOCAL_PATH)/../src/game \
     $(LOCAL_PATH)/../src/other \
     $(LOCAL_PATH)/../src/protect \
-    $(LOCAL_PATH)/../src/shadowhook \
     $(LOCAL_PATH)/../src/offsets \
     $(LOCAL_PATH)/../src/aim
 
@@ -87,10 +74,6 @@ LOCAL_LDFLAGS := \
     -Wl,-z,now \
     -Wl,-z,noexecstack \
     -Wl,-z,max-page-size=16384
-
-# ─── STATIC LIBS ───
-LOCAL_STATIC_LIBRARIES := \
-    libshadowhook
 
 # ─── SYSTEM LIBS ───
 LOCAL_LDLIBS := \

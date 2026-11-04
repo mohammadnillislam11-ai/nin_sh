@@ -26,7 +26,6 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/game
     ${CMAKE_CURRENT_SOURCE_DIR}/src/other
     ${CMAKE_CURRENT_SOURCE_DIR}/src/protect
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/shadowhook
 )
 
 file(GLOB_RECURSE SRC_FILES
@@ -43,7 +42,6 @@ add_executable(client.sh ${SRC_FILES})
 
 target_link_libraries(client.sh
     PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/shadowhook/libshadowhook.a
     log
     android
     EGL

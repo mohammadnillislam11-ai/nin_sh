@@ -35,10 +35,6 @@
 #define FG_BCYAN   "\033[96m"
 #define FG_BWHITE  "\033[97m"
 
-// ═══════════════════════════════════════════════════════════
-// BYPASS
-// ═══════════════════════════════════════════════════════════
-extern "C" void init_bypass();
 extern float global_anim_time;
 std::atomic<bool> main_thread_flag{true};
 
