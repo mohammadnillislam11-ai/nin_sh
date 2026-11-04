@@ -173,14 +173,22 @@ namespace data {
         }
 
         auto m_Match = rpm<uint64_t>(BaseGame + Offsets::BaseGame_Match);
-        if (!m_Match) return;
+        if (!m_Match) {
+            std::lock_guard<std::mutex> lk(players_mutex);
+            players.clear();
+            return;
+        }
 
         auto localPlayer = rpm<uint64_t>(m_Match + Offsets::Match_LocalPlayer);
 
         // Simpan local player
         localPlayerAddr.store(localPlayer ? localPlayer : 0);
 
-        if (!localPlayer) return;
+        if (!localPlayer) {
+            std::lock_guard<std::mutex> lk(players_mutex);
+            players.clear();
+            return;
+        }
 
         // ── Camera chain ──
         uint64_t Follow = 0, Cam = 0, IntPtr = 0;
@@ -196,7 +204,11 @@ namespace data {
             if (Cam)    IntPtr = rpm<uint64_t>(Cam + 0x10);
         }
 
-        if (!IntPtr) return;
+        if (!IntPtr) {
+            std::lock_guard<std::mutex> lk(players_mutex);
+            players.clear();
+            return;
+        }
 
         viewMatrix = rpm<matrix>(IntPtr + Offsets::Camera_Matrix);
 
@@ -215,10 +227,18 @@ namespace data {
 
         // ── PLAYERS ──
         uint64_t dictAddr = rpm<uint64_t>(BaseGame + Offsets::Match_PlayerDict);
-        if (!dictAddr) return;
+        if (!dictAddr) {
+            std::lock_guard<std::mutex> lk(players_mutex);
+            players.clear();
+            return;
+        }
 
         MonoDictionary dict(dictAddr);
-        if (!dict.valid) return;
+        if (!dict.valid) {
+            std::lock_guard<std::mutex> lk(players_mutex);
+            players.clear();
+            return;
+        }
 
         int nv = dict.getNumValues();
         for (int i = 0; i < nv; i++) {
@@ -269,10 +289,12 @@ namespace data {
             uint64_t hNode = rpm<uint64_t>(enemy + Offsets::Bone_Head);
             if (!hNode) continue;
             Vector3 headWorld = GetNodePosition(hNode);
-            if (headWorld == Vector3::Zero()) continue;
+            if (headWorld == Vector3::Zero() || headWorld.sqrMagnitude() < 1.0f) continue;
+            if (!std::isfinite(headWorld.x) || !std::isfinite(headWorld.y) || !std::isfinite(headWorld.z)) continue;
+            if (headWorld.y < -150.0f || headWorld.y > 600.0f) continue;
 
             float dist = calculate_distance(localPos, headWorld);
-            if (dist > cfg::esp::max_range) continue;
+            if (dist < 0.8f || dist > cfg::esp::max_range) continue;
 
             Vector3 headScreen = WorldToScreenPoint(viewMatrix, headWorld);
             if (headScreen.z < 0.001f) continue;

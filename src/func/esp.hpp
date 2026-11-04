@@ -402,7 +402,8 @@ namespace func::esp {
         ImVec2 anchor(g_sw * 0.5f, 0.f);
 
         for (const auto& p : snap) {
-            if (p.Head.z < 0.001f || p.Toe.z < 0.001f) continue;
+            if (p.Head.z < 0.5f || p.Toe.z < 0.5f) continue;
+            if (p.curHP <= 0) continue;
             if (cfg::esp::ignore_bots && p.isBot) continue;
 
             if (p.distance > cfg::esp::max_range) continue;
@@ -413,8 +414,8 @@ namespace func::esp {
             ImVec2 tl = pb.tl;
             ImVec2 br = pb.br;
 
-            if (br.x < -100 || tl.x > g_sw + 100) continue;
-            if (br.y < -100 || tl.y > g_sh + 100) continue;
+            if (br.x < -30.f || tl.x > g_sw + 30.f) continue;
+            if (br.y < -30.f || tl.y > g_sh + 30.f) continue;
 
             float cx = (tl.x + br.x) * 0.5f;
 
@@ -423,14 +424,18 @@ namespace func::esp {
             colBase = fadeDist(colBase, p.distance, cfg::esp::max_range);
 
             if (cfg::esp::tracer) {
-                ImVec2 head(p.Head.x, p.Head.y);
-                float aa = ImClamp(1.f - p.distance / cfg::esp::max_range, 0.25f, 1.f);
-                float tThick = cfg::esp::tracer_thickness;
-                // Sleek dynamic laser line with soft glow
-                dl->AddLine(anchor, head,
-                    withAlpha(toU32(cfg::esp::box_col), 0.25f * aa), tThick + 1.4f);
-                dl->AddLine(anchor, head,
-                    withAlpha(toU32(cfg::esp::box_col), 0.95f * aa), tThick);
+                // Strictly draw tracer ONLY when head point is within visible screen bounds
+                if (p.Head.x >= 0.f && p.Head.x <= g_sw &&
+                    p.Head.y >= 0.f && p.Head.y <= g_sh) {
+                    ImVec2 head(p.Head.x, p.Head.y);
+                    float aa = ImClamp(1.f - p.distance / cfg::esp::max_range, 0.25f, 1.f);
+                    float tThick = cfg::esp::tracer_thickness;
+                    // Sleek dynamic laser line with soft glow
+                    dl->AddLine(anchor, head,
+                        withAlpha(toU32(cfg::esp::box_col), 0.25f * aa), tThick + 1.4f);
+                    dl->AddLine(anchor, head,
+                        withAlpha(toU32(cfg::esp::box_col), 0.95f * aa), tThick);
+                }
             }
 
             if (cfg::esp::box)
