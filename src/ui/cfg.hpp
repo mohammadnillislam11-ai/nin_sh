@@ -4,18 +4,18 @@
 namespace cfg {
 namespace esp {
     // ── Master ──
-    inline bool  box              = true;
+    inline bool  box              = false;
     inline int   box_type         = 1; // 1 = Full Chaturbhuj (Rectangular) Box
-    inline bool  name             = true;
-    inline bool  health           = true;
-    inline bool  armor            = true;
-    inline bool  distance         = true;
-    inline bool  weapon           = true;
-    inline bool  bot_tag          = true;
+    inline bool  name             = false;
+    inline bool  health           = false;
+    inline bool  armor            = false;
+    inline bool  distance         = false;
+    inline bool  weapon           = false;
+    inline bool  bot_tag          = false;
     inline bool  ignore_bots      = false;
-    inline bool  tracer           = true;
-    inline bool  crosshair        = true;
-    inline bool  firing_ind       = true;
+    inline bool  tracer           = false;
+    inline bool  crosshair        = false;
+    inline bool  firing_ind       = false;
     inline bool  loot             = false;
 
     // ── Setting ──
@@ -35,23 +35,23 @@ namespace esp {
 }
 
 namespace combat {
-    inline bool auto_target_closest = true;
+    inline bool auto_target_closest = false;
     inline bool prioritize_low_hp   = false;
-    inline bool filter_invisible    = true;
+    inline bool filter_invisible    = false;
 }
 
 namespace aim {
-    inline bool  enable           = true;
-    inline bool  show_fov         = true;
+    inline bool  enable           = false;
+    inline bool  show_fov         = false;
     inline float fov_radius       = 180.0f;
     inline float smooth           = 6.0f;
     inline int   target_bone      = 0; // 0 = Head, 1 = Neck/Chest, 2 = Pelvis/Body
     inline int   trigger_mode     = 0; // 0 = When Firing, 1 = Always In FOV
     inline int   priority_mode    = 0; // 0 = Crosshair Distance, 1 = Low HP, 2 = 3D Distance
-    inline bool  ignore_knocked   = true;
+    inline bool  ignore_knocked   = false;
     inline bool  ignore_bots      = false;
-    inline bool  visible_check    = true;
+    inline bool  visible_check    = false;
     inline float max_distance     = 200.0f;
-    inline bool  prediction       = true;
+    inline bool  prediction       = false;
 }
 }
