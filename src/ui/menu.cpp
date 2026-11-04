@@ -206,6 +206,8 @@ namespace ui::menu {
             s_license_initialized = true;
         }
 
+        ImGuiIO& io = ImGui::GetIO();
+
         bool license_ok = lic::is_valid();
         if (license_ok) {
             // Render ESP overlays on the background only when license is active and valid
