@@ -10,6 +10,7 @@
 #include <cmath>
 #include <algorithm>
 #include <mutex>
+#include <atomic>
 
 using namespace ImGui;
 
@@ -18,25 +19,19 @@ namespace ImGui {
     IMGUI_API void ClearActiveID();
 }
 
-extern bool main_thread_flag;
+extern std::atomic<bool> main_thread_flag;
 static int activeTab = 0;
 static float ui_opacity = 1.0f;
-static bool menu_open = true;
-static bool g_should_exit = false;
+static std::atomic<bool> menu_open{true};
+static std::atomic<bool> g_should_exit{false};
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// DESIGN 08: ELECTRIC ORCHID GLASS — EXACT COLOR DEFINITIONS
+// DESIGN 08: ELECTRIC ORCHID GLASS — COLOR DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 namespace theme_orchid {
     constexpr ImU32 ColPrimary       = IM_COL32(225, 0, 152, 255);       // Electric Orchid #E10098
     constexpr ImU32 ColPrimaryLight  = IM_COL32(255, 90, 205, 255);      // Soft Orchid Glow #FF5ACD
-    constexpr ImU32 ColPrimaryMuted  = IM_COL32(225, 0, 152, 60);        // Translucent Orchid
-    constexpr ImU32 ColBgDark        = IM_COL32(14, 12, 20, 250);        // Deep Glass Navy #0E0C14
     constexpr ImU32 ColHeaderBg      = IM_COL32(21, 16, 31, 255);        // Header #15101F
-    constexpr ImU32 ColSidebarBg     = IM_COL32(17, 14, 24, 255);        // Sidebar #110E18
-    constexpr ImU32 ColCardBg        = IM_COL32(22, 17, 33, 230);        // Card Panel #161121
-    constexpr ImU32 ColBorder        = IM_COL32(225, 0, 152, 180);       // Window Border Glow
-    constexpr ImU32 ColCardBorder    = IM_COL32(50, 36, 72, 255);        // Card Subtle Border #322448
     constexpr ImU32 ColTextMuted     = IM_COL32(155, 140, 180, 255);     // Muted Text #9B8CB4
     constexpr ImU32 ColWhite         = IM_COL32(252, 248, 255, 255);     // Clean White
 }

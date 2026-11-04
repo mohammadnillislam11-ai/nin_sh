@@ -15,6 +15,7 @@
 #include <android/log.h>
 #include <iostream>
 #include <string>
+#include <atomic>
 
 #define LOG_TAG "ninmods"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
@@ -36,7 +37,7 @@
 // ═══════════════════════════════════════════════════════════
 extern "C" void init_bypass();
 extern float global_anim_time;
-bool main_thread_flag = true;
+std::atomic<bool> main_thread_flag{true};
 
 // ═══════════════════════════════════════════════════════════
 // TARGET GAME
