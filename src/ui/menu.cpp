@@ -1,6 +1,5 @@
 #include "menu.hpp"
 #include "imgui.h"
-#include "imgui_internal.h"
 #include "Android_draw/draw.h"
 #include "Android_touch/Touch.hpp"
 #include "func/esp.hpp"
@@ -142,29 +141,27 @@ static bool DrawSidebarIconButton(const char* str_id, EIconType icon_type, bool 
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// NATIVE TOUCH-SCROLL HANDLER (AXIS-LOCKED GESTURE DISCRIMINATION)
-// 100% eliminates slider conflicts by locking gestures to horizontal (slider)
-// or vertical (scroll) based on movement vector and intentional threshold.
+// NATIVE TOUCH-SCROLL HANDLER (100% PUBLIC IMGUI API — ZERO INTERNAL DEPENDENCY)
+// Axis-locked gesture discrimination eliminates slider conflicts completely.
 // ═══════════════════════════════════════════════════════════════════════════════
 static void handleTouchScroll() {
     ImGuiIO& io = ImGui::GetIO();
     enum GestureState { GESTURE_IDLE, GESTURE_HORIZONTAL, GESTURE_VERTICAL };
     static GestureState s_gesture = GESTURE_IDLE;
     static ImVec2 s_touch_start = ImVec2(0, 0);
-    static ImGuiID s_active_window = 0;
+    static ImGuiID s_active_child = 0;
 
-    ImGuiWindow* window = ImGui::GetCurrentWindow();
-    if (!window) return;
+    ImGuiID child_id = ImGui::GetID("##TouchScrollToken");
 
     if (io.MouseDown[0]) {
         if (s_gesture == GESTURE_IDLE) {
-            if (s_active_window == 0 && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
+            if (s_active_child == 0 && ImGui::IsWindowHovered()) {
                 s_touch_start = io.MousePos;
-                s_active_window = window->ID;
+                s_active_child = child_id;
             }
         }
 
-        if (s_active_window == window->ID) {
+        if (s_active_child == child_id) {
             float dx = io.MousePos.x - s_touch_start.x;
             float dy = io.MousePos.y - s_touch_start.y;
             float abs_dx = std::abs(dx);
@@ -182,21 +179,17 @@ static void handleTouchScroll() {
             }
 
             if (s_gesture == GESTURE_VERTICAL) {
-                // User's intent is vertical scroll: cancel any accidental item activation
-                if (ImGui::GetActiveID() != 0 && ImGui::GetActiveID() != window->MoveId) {
-                    ImGui::ClearActiveID();
-                }
                 float delta_y = io.MouseDelta.y;
                 if (std::abs(delta_y) > 0.01f) {
                     ImGui::SetScrollY(ImGui::GetScrollY() - delta_y);
                 }
             }
-            // In GESTURE_HORIZONTAL mode: ZERO scroll interference. Slider has 100% control.
+            // In GESTURE_HORIZONTAL mode: ZERO scroll interference. Slider has 100% exclusive control.
         }
     } else {
         // Finger released: reset gesture state cleanly
         s_gesture = GESTURE_IDLE;
-        s_active_window = 0;
+        s_active_child = 0;
     }
 }
 
@@ -263,17 +256,33 @@ namespace ui::menu {
                 ImVec2 avail = ImGui::GetContentRegionAvail();
                 bool clicked = ImGui::InvisibleButton("##ReOpenPill", avail);
 
-                // Allow dragging the pill across screen + tap to reopen
-                if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
-                    ImVec2 curPos = ImGui::GetWindowPos();
-                    curPos.x += io.MouseDelta.x;
-                    curPos.y += io.MouseDelta.y;
-                    // Keep pill safely clamped inside screen edges
-                    curPos.x = ImClamp(curPos.x, 10.0f, realW - pillW - 10.0f);
-                    curPos.y = ImClamp(curPos.y, 10.0f, realH - pillH - 10.0f);
-                    ImGui::SetWindowPos(curPos);
-                } else if (clicked) {
-                    menu_open = true;
+                static bool pill_was_dragged = false;
+
+                // Dragging logic
+                if (ImGui::IsItemActive()) {
+                    if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+                        pill_was_dragged = true;
+                        ImVec2 curPos = ImGui::GetWindowPos();
+                        curPos.x += io.MouseDelta.x;
+                        curPos.y += io.MouseDelta.y;
+                        // Safe edge clamping within visible screen limits
+                        if (curPos.x < 10.0f) curPos.x = 10.0f;
+                        if (curPos.x > realW - pillW - 10.0f) curPos.x = realW - pillW - 10.0f;
+                        if (curPos.y < 10.0f) curPos.y = 10.0f;
+                        if (curPos.y > realH - pillH - 10.0f) curPos.y = realH - pillH - 10.0f;
+                        ImGui::SetWindowPos(curPos);
+                    }
+                }
+
+                // Strict separation: Drag release NEVER triggers Click (eliminates double-trigger)
+                if (io.MouseReleased[0]) {
+                    if (pill_was_dragged) {
+                        pill_was_dragged = false; // Drag completed; suppress menu opening
+                    } else if (clicked) {
+                        menu_open = true; // Clean single tap; open menu
+                    }
+                } else if (!io.MouseDown[0] && pill_was_dragged) {
+                    pill_was_dragged = false;
                 }
 
                 ImDrawList* dl = ImGui::GetWindowDrawList();
