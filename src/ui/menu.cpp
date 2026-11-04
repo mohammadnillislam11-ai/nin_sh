@@ -1,4 +1,5 @@
 #include "menu.hpp"
+#include "license.hpp"
 #include "imgui.h"
 #include "Android_draw/draw.h"
 #include "Android_touch/Touch.hpp"
@@ -199,10 +200,20 @@ static void handleTouchScroll() {
 namespace ui::menu {
 
     void render() {
-        // Always render ESP overlays on the background first
-        func::esp::draw();
+        static bool s_license_initialized = false;
+        if (!s_license_initialized) {
+            lic::init();
+            s_license_initialized = true;
+        }
 
         ImGuiIO& io = ImGui::GetIO();
+        lic::update_toast_timer(io.DeltaTime);
+
+        bool license_ok = lic::is_valid();
+        if (license_ok) {
+            // Render ESP overlays on the background only when license is active and valid
+            func::esp::draw();
+        }
 
         float realW = (float)displayInfo.width;
         float realH = (float)displayInfo.height;
@@ -674,7 +685,50 @@ namespace ui::menu {
                     ImGui::Text("Overlay FPS: %.1f", io.Framerate);
                     ImGui::Text("Screen: %.0f x %.0f", realW, realH);
 
-                    ImGui::Dummy(ImVec2(0, 12));
+                    // ══════════════════════════════════════════════════════════
+                    // LICENSE & ACTIVATION STATUS CARD
+                    // ══════════════════════════════════════════════════════════
+                    ImGui::Dummy(ImVec2(0, 10));
+                    ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.80f, 1.0f), "LICENSE STATUS");
+                    rpos = ImGui::GetCursorScreenPos();
+                    cdl->AddLine(ImVec2(rpos.x, rpos.y - 4), ImVec2(rpos.x + 120, rpos.y - 4), theme_orchid::ColPrimary, 2.0f);
+                    ImGui::Dummy(ImVec2(0, 4));
+
+                    const char* st = lic::status_text();
+                    ImVec4 st_col;
+                    if (strcmp(st, "VALID") == 0) {
+                        st_col = ImVec4(0.2f, 1.0f, 0.4f, 1.0f);       // Green
+                    } else if (strcmp(st, "COMING SOON") == 0) {
+                        st_col = ImVec4(1.0f, 0.9f, 0.2f, 1.0f);       // Yellow
+                    } else if (strcmp(st, "NO KEY") == 0) {
+                        st_col = ImVec4(0.6f, 0.6f, 0.6f, 1.0f);       // Gray
+                    } else {
+                        st_col = ImVec4(1.0f, 0.3f, 0.3f, 1.0f);       // Red (EXPIRED / INVALID)
+                    }
+
+                    ImGui::Text("Status: ");
+                    ImGui::SameLine();
+                    ImGui::TextColored(st_col, "%s", st);
+
+                    ImGui::TextDisabled("Expires: 2026-11-06");
+
+                    static char s_tab_key_buf[64] = {0};
+                    static bool s_tab_key_synced = false;
+                    if (!s_tab_key_synced) {
+                        std::string cur = lic::current_key();
+                        snprintf(s_tab_key_buf, sizeof(s_tab_key_buf), "%s", cur.c_str());
+                        s_tab_key_synced = true;
+                    }
+
+                    ImGui::SetNextItemWidth(-1);
+                    ImGui::InputText("##TabKeyInput", s_tab_key_buf, sizeof(s_tab_key_buf),
+                                     ImGuiInputTextFlags_Password | ImGuiInputTextFlags_CharsUppercase);
+
+                    if (ImGui::Button("Apply Key##Tab", ImVec2(ImGui::GetContentRegionAvail().x, 32))) {
+                        lic::set_key(s_tab_key_buf);
+                    }
+
+                    ImGui::Dummy(ImVec2(0, 10));
                     if (ImGui::Button("SAFE EXIT APPLICATION", ImVec2(ImGui::GetContentRegionAvail().x, 38))) {
                         g_should_exit = true; // Signal exit cleanly outside ImGui frame
                     }
@@ -691,6 +745,178 @@ namespace ui::menu {
 
         ImGui::PopStyleVar(7);
         ImGui::PopStyleColor(20);
+
+        // ══════════════════════════════════════════════════════════════════════
+        // LICENSE MODAL (BLOCKS ALL BACKGROUND INTERACTION IF NOT VALID)
+        // ══════════════════════════════════════════════════════════════════════
+        if (!license_ok) {
+            ImGui::OpenPopup("##LicenseGateModal");
+            ImGui::SetNextWindowPos(ImVec2(realW * 0.5f, realH * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(ImMin(420.0f, realW * 0.90f), 0.0f));
+
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.06f, 0.12f, 0.98f));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.88f, 0.00f, 0.60f, 0.90f));
+            ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.08f, 0.06f, 0.12f, 0.98f));
+            ImGui::PushStyleColor(ImGuiCol_ModalWindowDimBg, ImVec4(0.02f, 0.01f, 0.03f, 0.85f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 14.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.5f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20, 20));
+
+            if (ImGui::BeginPopupModal("##LicenseGateModal", nullptr,
+                                       ImGuiWindowFlags_AlwaysAutoResize |
+                                       ImGuiWindowFlags_NoMove |
+                                       ImGuiWindowFlags_NoTitleBar)) {
+
+                const char* st = lic::status_text();
+                time_t now = time(nullptr);
+                time_t t_start = lic::start_date();
+
+                // Modal Header
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+                ImVec2 cp = ImGui::GetCursorScreenPos();
+                DrawLogoFlame(dl, ImVec2(cp.x + 18, cp.y + 12), 20.0f, theme_orchid::ColPrimary);
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 40);
+                ImGui::TextColored(theme_orchid::ColPrimary, "NINMODS SECURITY GATE");
+                ImGui::Separator();
+                ImGui::Dummy(ImVec2(0, 8));
+
+                static char s_modal_key_buf[64] = {0};
+                static bool s_has_attempted = false;
+
+                if (strcmp(st, "COMING SOON") == 0) {
+                    ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "COMING SOON");
+                    ImGui::TextWrapped("Available on 4 November 2026.");
+                    ImGui::Dummy(ImVec2(0, 4));
+
+                    long long diff = (now < t_start) ? static_cast<long long>(t_start - now) : 0;
+                    long long days = diff / 86400;
+                    long long hours = (diff % 86400) / 3600;
+
+                    if (days > 0) {
+                        ImGui::TextDisabled("Starts in %lld day%s, %lld hour%s.", days, (days > 1 ? "s" : ""), hours, (hours > 1 ? "s" : ""));
+                    } else {
+                        ImGui::TextDisabled("Starts in %lld hour%s.", hours, (hours > 1 ? "s" : ""));
+                    }
+
+                    ImGui::Dummy(ImVec2(0, 12));
+                    if (ImGui::Button("Exit Application", ImVec2(-1, 38))) {
+                        g_should_exit = true;
+                    }
+                } else if (strcmp(st, "EXPIRED") == 0) {
+                    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "LICENSE EXPIRED");
+                    ImGui::TextWrapped("License expired on 6 November 2026.");
+                    ImGui::Dummy(ImVec2(0, 4));
+
+                    ImGui::TextDisabled("Renew access at Telegram:");
+                    ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "https://t.me/ninmods");
+                    ImGui::Dummy(ImVec2(0, 6));
+
+                    if (ImGui::Button("Open Telegram", ImVec2(-1, 36))) {
+                        lic::open_update_page();
+                        lic::trigger_redirect_toast();
+                    }
+
+                    ImGui::Dummy(ImVec2(0, 8));
+                    ImGui::Text("Enter New Key:");
+                    ImGui::SetNextItemWidth(-1);
+                    bool enter = ImGui::InputText("##ModalKeyExpired", s_modal_key_buf, sizeof(s_modal_key_buf),
+                                     ImGuiInputTextFlags_Password | ImGuiInputTextFlags_CharsUppercase | ImGuiInputTextFlags_EnterReturnsTrue);
+
+                    if (ImGui::Button("Apply Key", ImVec2(-1, 36)) || enter) {
+                        bool res = lic::set_key(s_modal_key_buf);
+                        if (!res) {
+                            s_has_attempted = true;
+                        } else {
+                            ImGui::CloseCurrentPopup();
+                        }
+                    }
+
+                    if (s_has_attempted) {
+                        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "Invalid key for current build.");
+                    }
+
+                    ImGui::Dummy(ImVec2(0, 8));
+                    if (ImGui::Button("Exit Application", ImVec2(-1, 36))) {
+                        g_should_exit = true;
+                    }
+                } else {
+                    // NO KEY / INVALID
+                    ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.6f, 1.0f), "AUTHENTICATION REQUIRED");
+                    ImGui::TextWrapped("Enter license key to continue:");
+                    ImGui::Dummy(ImVec2(0, 6));
+
+                    ImGui::SetNextItemWidth(-1);
+                    bool enter = ImGui::InputText("##ModalKeyAuth", s_modal_key_buf, sizeof(s_modal_key_buf),
+                                     ImGuiInputTextFlags_Password | ImGuiInputTextFlags_CharsUppercase | ImGuiInputTextFlags_EnterReturnsTrue);
+
+                    ImGui::Dummy(ImVec2(0, 4));
+                    if (ImGui::Button("Apply Key", ImVec2(-1, 38)) || enter) {
+                        bool res = lic::set_key(s_modal_key_buf);
+                        if (res) {
+                            ImGui::CloseCurrentPopup();
+                        } else {
+                            s_has_attempted = true;
+                        }
+                    }
+
+                    if (s_has_attempted) {
+                        ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "Invalid license key. Try again.");
+                    }
+
+                    ImGui::Dummy(ImVec2(0, 6));
+                    if (ImGui::Button("Open Telegram", ImVec2(-1, 36))) {
+                        lic::open_update_page();
+                    }
+
+                    ImGui::TextDisabled("Official: https://t.me/ninmods");
+
+                    ImGui::Dummy(ImVec2(0, 6));
+                    if (ImGui::Button("Exit Application", ImVec2(-1, 36))) {
+                        g_should_exit = true;
+                    }
+                }
+
+                ImGui::EndPopup();
+            }
+
+            ImGui::PopStyleVar(3);
+            ImGui::PopStyleColor(4);
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // NON-BLOCKING TOAST OVERLAY (ACTIVE FOR 2 SECONDS AFTER REDIRECT)
+        // ══════════════════════════════════════════════════════════════════════
+        if (lic::should_show_redirect_toast()) {
+            const char* toastText = "Opening Telegram...";
+            ImVec2 txtSz = ImGui::CalcTextSize(toastText);
+            float toastW = txtSz.x + 36.0f;
+            float toastH = txtSz.y + 20.0f;
+
+            ImGui::SetNextWindowPos(ImVec2(realW * 0.5f, realH * 0.85f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(toastW, toastH));
+
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.08f, 0.18f, 0.95f));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.88f, 0.00f, 0.60f, 1.00f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.5f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 10));
+
+            ImGuiWindowFlags toastFlags = ImGuiWindowFlags_NoTitleBar |
+                                          ImGuiWindowFlags_NoResize |
+                                          ImGuiWindowFlags_NoScrollbar |
+                                          ImGuiWindowFlags_NoMove |
+                                          ImGuiWindowFlags_NoInputs |
+                                          ImGuiWindowFlags_NoFocusOnAppearing |
+                                          ImGuiWindowFlags_NoNav;
+
+            if (ImGui::Begin("##RedirectToast", nullptr, toastFlags)) {
+                ImGui::TextColored(theme_orchid::ColPrimaryLight, "%s", toastText);
+            }
+            ImGui::End();
+
+            ImGui::PopStyleVar(3);
+            ImGui::PopStyleColor(2);
+        }
 
         // ══════════════════════════════════════════════════════════════════════
         // DEFERRED SAFE SHUTDOWN (CALLED AFTER ALL IMGUI FRAMES UNWOUND)
