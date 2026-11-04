@@ -183,7 +183,7 @@ static void handleTouchScroll() {
 
             if (s_gesture == GESTURE_VERTICAL) {
                 // User's intent is vertical scroll: cancel any accidental item activation
-                if (ImGui::GetActiveId() != 0 && ImGui::GetActiveId() != window->MoveId) {
+                if (ImGui::GetActiveID() != 0 && ImGui::GetActiveID() != window->MoveId) {
                     ImGui::ClearActiveID();
                 }
                 float delta_y = io.MouseDelta.y;
