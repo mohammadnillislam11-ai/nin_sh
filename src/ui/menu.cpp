@@ -1,5 +1,6 @@
 #include "menu.hpp"
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "Android_draw/draw.h"
 #include "Android_touch/Touch.hpp"
 #include "func/esp.hpp"
@@ -141,16 +142,61 @@ static bool DrawSidebarIconButton(const char* str_id, EIconType icon_type, bool 
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// NATIVE TOUCH-SCROLL HANDLER
-// Ensures finger dragging scrolls child windows smoothly even with hidden scrollbars
+// NATIVE TOUCH-SCROLL HANDLER (AXIS-LOCKED GESTURE DISCRIMINATION)
+// 100% eliminates slider conflicts by locking gestures to horizontal (slider)
+// or vertical (scroll) based on movement vector and intentional threshold.
 // ═══════════════════════════════════════════════════════════════════════════════
 static void handleTouchScroll() {
     ImGuiIO& io = ImGui::GetIO();
-    if (ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
-        float dy = io.MouseDelta.y;
-        if (std::abs(dy) > 0.05f) {
-            ImGui::SetScrollY(ImGui::GetScrollY() - dy);
+    enum GestureState { GESTURE_IDLE, GESTURE_HORIZONTAL, GESTURE_VERTICAL };
+    static GestureState s_gesture = GESTURE_IDLE;
+    static ImVec2 s_touch_start = ImVec2(0, 0);
+    static ImGuiID s_active_window = 0;
+
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    if (!window) return;
+
+    if (io.MouseDown[0]) {
+        if (s_gesture == GESTURE_IDLE) {
+            if (s_active_window == 0 && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
+                s_touch_start = io.MousePos;
+                s_active_window = window->ID;
+            }
         }
+
+        if (s_active_window == window->ID) {
+            float dx = io.MousePos.x - s_touch_start.x;
+            float dy = io.MousePos.y - s_touch_start.y;
+            float abs_dx = std::abs(dx);
+            float abs_dy = std::abs(dy);
+
+            if (s_gesture == GESTURE_IDLE) {
+                // If horizontal movement exceeds 5px and dominates vertical -> lock to HORIZONTAL (Slider/Widget)
+                if (abs_dx >= 5.0f && abs_dx > abs_dy * 1.1f) {
+                    s_gesture = GESTURE_HORIZONTAL;
+                }
+                // If vertical movement exceeds 5px and dominates horizontal -> lock to VERTICAL (Scroll)
+                else if (abs_dy >= 5.0f && abs_dy > abs_dx * 1.1f) {
+                    s_gesture = GESTURE_VERTICAL;
+                }
+            }
+
+            if (s_gesture == GESTURE_VERTICAL) {
+                // User's intent is vertical scroll: cancel any accidental item activation
+                if (ImGui::GetActiveId() != 0 && ImGui::GetActiveId() != window->MoveId) {
+                    ImGui::ClearActiveID();
+                }
+                float delta_y = io.MouseDelta.y;
+                if (std::abs(delta_y) > 0.01f) {
+                    ImGui::SetScrollY(ImGui::GetScrollY() - delta_y);
+                }
+            }
+            // In GESTURE_HORIZONTAL mode: ZERO scroll interference. Slider has 100% control.
+        }
+    } else {
+        // Finger released: reset gesture state cleanly
+        s_gesture = GESTURE_IDLE;
+        s_active_window = 0;
     }
 }
 
@@ -168,13 +214,44 @@ namespace ui::menu {
         if (realH <= 0) realH = 1080.0f;
 
         // ══════════════════════════════════════════════════════════════════════
+        // SCREEN ROTATION & RESOLUTION TRACKER
+        // Tracks orientation flips globally across both Pill and Main Menu
+        // ══════════════════════════════════════════════════════════════════════
+        static int last_orientation = -1;
+        static float last_screen_w = 0.0f;
+        static float last_screen_h = 0.0f;
+        static bool menu_needs_reposition = false;
+        static bool pill_needs_reposition = false;
+
+        bool screen_changed = (last_orientation != displayInfo.orientation ||
+                               last_screen_w != realW ||
+                               last_screen_h != realH);
+
+        if (screen_changed) {
+            last_orientation = displayInfo.orientation;
+            last_screen_w = realW;
+            last_screen_h = realH;
+            menu_needs_reposition = true;
+            pill_needs_reposition = true;
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
         // FLOATING RE-OPEN PILL (SHOWN ONLY WHEN MENU IS MINIMIZED)
         // ══════════════════════════════════════════════════════════════════════
         if (!menu_open) {
+            const float pillW = 136.0f;
+            const float pillH = 44.0f;
             float pillInitX = (realW > 1000.0f) ? 60.0f : 30.0f;
             float pillInitY = 32.0f;
-            ImGui::SetNextWindowPos(ImVec2(pillInitX, pillInitY), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSize(ImVec2(136, 44));
+
+            if (pill_needs_reposition) {
+                // Re-anchor pill cleanly to safe screen coordinate upon rotation
+                ImGui::SetNextWindowPos(ImVec2(pillInitX, pillInitY), ImGuiCond_Always);
+                pill_needs_reposition = false;
+            } else {
+                ImGui::SetNextWindowPos(ImVec2(pillInitX, pillInitY), ImGuiCond_FirstUseEver);
+            }
+            ImGui::SetNextWindowSize(ImVec2(pillW, pillH));
 
             ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.082f, 0.063f, 0.122f, 0.95f));
             ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.882f, 0.000f, 0.596f, 0.90f));
@@ -184,9 +261,21 @@ namespace ui::menu {
 
             if (ImGui::Begin("##NIN_MINI", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar)) {
                 ImVec2 avail = ImGui::GetContentRegionAvail();
-                if (ImGui::InvisibleButton("##ReOpenPill", avail)) {
+                bool clicked = ImGui::InvisibleButton("##ReOpenPill", avail);
+
+                // Allow dragging the pill across screen + tap to reopen
+                if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+                    ImVec2 curPos = ImGui::GetWindowPos();
+                    curPos.x += io.MouseDelta.x;
+                    curPos.y += io.MouseDelta.y;
+                    // Keep pill safely clamped inside screen edges
+                    curPos.x = ImClamp(curPos.x, 10.0f, realW - pillW - 10.0f);
+                    curPos.y = ImClamp(curPos.y, 10.0f, realH - pillH - 10.0f);
+                    ImGui::SetWindowPos(curPos);
+                } else if (clicked) {
                     menu_open = true;
                 }
+
                 ImDrawList* dl = ImGui::GetWindowDrawList();
                 ImVec2 p0 = ImGui::GetItemRectMin();
                 ImVec2 p1 = ImGui::GetItemRectMax();
@@ -208,19 +297,7 @@ namespace ui::menu {
         const float winW = ImMin(820.0f, realW * 0.94f);
         const float winH = ImMin(460.0f, realH * 0.94f);
 
-        // Rotation & Screen Resize Detection
-        static int last_orientation = -1;
-        static float last_screen_w = 0.0f;
-        static float last_screen_h = 0.0f;
-
-        bool screen_changed = (last_orientation != displayInfo.orientation ||
-                               last_screen_w != realW ||
-                               last_screen_h != realH);
-
-        if (screen_changed) {
-            last_orientation = displayInfo.orientation;
-            last_screen_w = realW;
-            last_screen_h = realH;
+        if (menu_needs_reposition) {
             // Re-center and resize cleanly upon screen rotation
             ImGui::SetNextWindowSize(ImVec2(winW, winH), ImGuiCond_Always);
             ImGui::SetNextWindowPos(
@@ -228,6 +305,7 @@ namespace ui::menu {
                 ImGuiCond_Always,
                 ImVec2(0.5f, 0.5f)
             );
+            menu_needs_reposition = false;
         } else {
             ImGui::SetNextWindowSize(ImVec2(winW, winH), ImGuiCond_FirstUseEver);
             ImGui::SetNextWindowPos(
