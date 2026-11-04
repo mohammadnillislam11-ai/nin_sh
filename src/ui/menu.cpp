@@ -140,6 +140,20 @@ static bool DrawSidebarIconButton(const char* str_id, EIconType icon_type, bool 
     return pressed;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// NATIVE TOUCH-SCROLL HANDLER
+// Ensures finger dragging scrolls child windows smoothly even with hidden scrollbars
+// ═══════════════════════════════════════════════════════════════════════════════
+static void handleTouchScroll() {
+    ImGuiIO& io = ImGui::GetIO();
+    if (ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+        float dy = io.MouseDelta.y;
+        if (std::abs(dy) > 0.05f) {
+            ImGui::SetScrollY(ImGui::GetScrollY() - dy);
+        }
+    }
+}
+
 namespace ui::menu {
 
     void render() {
@@ -194,12 +208,34 @@ namespace ui::menu {
         const float winW = ImMin(820.0f, realW * 0.94f);
         const float winH = ImMin(460.0f, realH * 0.94f);
 
-        ImGui::SetNextWindowSize(ImVec2(winW, winH), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowPos(
-            ImVec2(realW * 0.5f, realH * 0.5f),
-            ImGuiCond_FirstUseEver,
-            ImVec2(0.5f, 0.5f)
-        );
+        // Rotation & Screen Resize Detection
+        static int last_orientation = -1;
+        static float last_screen_w = 0.0f;
+        static float last_screen_h = 0.0f;
+
+        bool screen_changed = (last_orientation != displayInfo.orientation ||
+                               last_screen_w != realW ||
+                               last_screen_h != realH);
+
+        if (screen_changed) {
+            last_orientation = displayInfo.orientation;
+            last_screen_w = realW;
+            last_screen_h = realH;
+            // Re-center and resize cleanly upon screen rotation
+            ImGui::SetNextWindowSize(ImVec2(winW, winH), ImGuiCond_Always);
+            ImGui::SetNextWindowPos(
+                ImVec2(realW * 0.5f, realH * 0.5f),
+                ImGuiCond_Always,
+                ImVec2(0.5f, 0.5f)
+            );
+        } else {
+            ImGui::SetNextWindowSize(ImVec2(winW, winH), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowPos(
+                ImVec2(realW * 0.5f, realH * 0.5f),
+                ImGuiCond_FirstUseEver,
+                ImVec2(0.5f, 0.5f)
+            );
+        }
 
         // Precise styling for Electric Orchid Glass + Complete Scrollbar Hiding
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.055f, 0.047f, 0.078f, 0.98f));
@@ -367,6 +403,8 @@ namespace ui::menu {
                     ImGui::Checkbox("ESP Bot Tag (AI)", &cfg::esp::bot_tag);
                     ImGui::Checkbox("ESP Weapon Name", &cfg::esp::weapon);
                     ImGui::Checkbox("Firing Indicator", &cfg::esp::firing_ind);
+
+                    handleTouchScroll();
                 }
                 ImGui::EndChild();
 
@@ -403,6 +441,8 @@ namespace ui::menu {
                     ImGui::SetNextItemWidth(-1);
                     ImGui::SliderFloat("##BoxThickness", &cfg::esp::box_thickness, 1.0f, 5.0f, "%.1f px");
                     ImGui::TextDisabled("Box Border Width");
+
+                    handleTouchScroll();
                 }
                 ImGui::EndChild();
             }
@@ -426,6 +466,8 @@ namespace ui::menu {
                     ImGui::Dummy(ImVec2(0, 10));
                     ImGui::TextDisabled("Tactical Notice:");
                     ImGui::TextWrapped("Direct touch injection is completely removed for maximum stability.");
+
+                    handleTouchScroll();
                 }
                 ImGui::EndChild();
 
@@ -476,6 +518,8 @@ namespace ui::menu {
                         ImGui::TextDisabled("Target Distance: -- m");
                         ImGui::TextDisabled("Target Health: --");
                     }
+
+                    handleTouchScroll();
                 }
                 ImGui::EndChild();
             }
@@ -500,6 +544,8 @@ namespace ui::menu {
                     ImGui::Text("100% Non-Invasive");
                     ImGui::Text("Screen Record: Unblocked");
                     ImGui::Text("Screenshot: Allowed");
+
+                    handleTouchScroll();
                 }
                 ImGui::EndChild();
 
@@ -528,6 +574,8 @@ namespace ui::menu {
                     if (ImGui::Button("SAFE EXIT APPLICATION", ImVec2(ImGui::GetContentRegionAvail().x, 38))) {
                         g_should_exit = true; // Signal exit cleanly outside ImGui frame
                     }
+
+                    handleTouchScroll();
                 }
                 ImGui::EndChild();
             }
