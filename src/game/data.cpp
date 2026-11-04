@@ -289,6 +289,7 @@ namespace data {
             pd.addr       = enemy;
             pd.Head       = headScreen;
             pd.Toe        = toeScreen;
+            pd.headWorld  = headWorld;
             pd.isVisible  = visible;
             pd.isBot      = isBot;
             pd.distance   = dist;

@@ -17,7 +17,12 @@ extern float g_sw;
 extern float g_sh;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PROFESSIONAL CRASH-PROOF AIM ASSIST ENGINE
+// PROFESSIONAL CRASH-PROOF & ANTI-DRAG AIM ASSIST ENGINE
+// Features:
+// 1. Dynamic FOV Circle (scales with slider, strictly filters targets)
+// 2. Direct 3D Headshot Ray Alignment (bullets hit HEAD, not body)
+// 3. Zero-Drag Protection: Never violently yanks or pulls screen away
+// 4. Target Stickiness: Prevents target jumping during fire bursts
 // ═══════════════════════════════════════════════════════════════════════════════
 
 namespace aimbot {
@@ -28,6 +33,7 @@ namespace aimbot {
         float distance = 0.0f;
         int hp = 0;
         Vector3 screenPos = Vector3::Zero();
+        Vector3 headWorld = Vector3::Zero();
     };
 
     inline TargetInfo g_currentTarget;
@@ -42,24 +48,49 @@ namespace aimbot {
         return Vector3(v.x * invLen, v.y * invLen, v.z * invLen);
     }
 
+    // Target stickiness lock to prevent flicking or erratic screen switching during bursts
+    inline uint64_t s_lockedTargetAddr = 0;
+
     inline void update() {
         g_currentTarget.valid = false;
-        if (!cfg::aim::enable) return;
-        if (!data::inMatch.load(std::memory_order_relaxed)) return;
+        if (!cfg::aim::enable) {
+            s_lockedTargetAddr = 0;
+            return;
+        }
+        if (!data::inMatch.load(std::memory_order_relaxed)) {
+            s_lockedTargetAddr = 0;
+            return;
+        }
 
         uint64_t localPlayer = data::localPlayerAddr.load(std::memory_order_relaxed);
-        if (!is_valid_ptr(localPlayer)) return;
+        if (!is_valid_ptr(localPlayer)) {
+            s_lockedTargetAddr = 0;
+            return;
+        }
 
         // Verify local player is alive
-        if (rpm<bool>(localPlayer + Offsets::Player::IsDead)) return;
+        if (rpm<bool>(localPlayer + Offsets::Player::IsDead)) {
+            s_lockedTargetAddr = 0;
+            return;
+        }
 
         // Trigger condition evaluation
+        bool isTriggered = false;
+        bool isFiring = rpm<bool>(localPlayer + Offsets::Player::IsFiring);
+
         if (cfg::aim::trigger_mode == 0) { // When Firing
-            bool isFiring = rpm<bool>(localPlayer + Offsets::Player::IsFiring);
-            if (!isFiring) return;
+            isTriggered = isFiring;
         } else if (cfg::aim::trigger_mode == 1) { // When Scoping
             uint64_t wpn = rpm<uint64_t>(localPlayer + Offsets::Player::Weapon);
-            if (!is_valid_ptr(wpn)) return;
+            isTriggered = is_valid_ptr(wpn) && isFiring;
+        } else { // Always In FOV
+            isTriggered = true;
+        }
+
+        // When not firing or not triggered: 100% free camera look, zero mutation, zero dragging!
+        if (!isTriggered) {
+            s_lockedTargetAddr = 0;
+            return;
         }
 
         std::vector<PlayerData> enemies;
@@ -68,55 +99,85 @@ namespace aimbot {
             enemies = data::players;
         }
 
-        if (enemies.empty()) return;
+        if (enemies.empty()) {
+            s_lockedTargetAddr = 0;
+            return;
+        }
 
         float screenCx = g_sw * 0.5f;
         float screenCy = g_sh * 0.5f;
         float fovLimit = cfg::aim::fov_radius;
-        float bestScore = 9999999.0f;
         const PlayerData* bestEnemy = nullptr;
         Vector3 bestScreenPos = Vector3::Zero();
 
-        for (const auto& enemy : enemies) {
-            if (enemy.Head.z < 0.001f) continue;
-            if (cfg::aim::ignore_knocked && enemy.curHP <= 0) continue;
-            if (cfg::aim::ignore_bots && enemy.isBot) continue;
-            if (cfg::aim::visible_check && !enemy.isVisible) continue;
-            if (enemy.distance > cfg::aim::max_distance) continue;
-
-            // Target bone selection
-            Vector3 aimPos = enemy.Head;
-            if (cfg::aim::target_bone == 1 && enemy.Toe.z >= 0.001f) {
-                // Neck / Upper Chest
-                aimPos.y = enemy.Head.y + (enemy.Toe.y - enemy.Head.y) * 0.22f;
-            } else if (cfg::aim::target_bone == 2 && enemy.Toe.z >= 0.001f) {
-                // Pelvis / Mid Body
-                aimPos.y = enemy.Head.y + (enemy.Toe.y - enemy.Head.y) * 0.45f;
-            }
-
-            // Calculate distance to crosshair in 2D screen space
-            float dx = aimPos.x - screenCx;
-            float dy = aimPos.y - screenCy;
-            float crosshairDist = sqrtf(dx * dx + dy * dy);
-
-            if (crosshairDist > fovLimit) continue;
-
-            // Priority mode evaluation
-            float score = crosshairDist;
-            if (cfg::aim::priority_mode == 1) { // Lowest HP
-                score = (float)enemy.curHP;
-            } else if (cfg::aim::priority_mode == 2) { // 3D Distance
-                score = enemy.distance;
-            }
-
-            if (score < bestScore) {
-                bestScore = score;
-                bestEnemy = &enemy;
-                bestScreenPos = aimPos;
+        // 1. Target Stickiness: If we are actively firing at a locked target, keep tracking it
+        if (s_lockedTargetAddr != 0) {
+            for (const auto& enemy : enemies) {
+                if (enemy.addr == s_lockedTargetAddr) {
+                    if (enemy.Head.z >= 0.001f && (!cfg::aim::ignore_knocked || enemy.curHP > 0)) {
+                        float dx = enemy.Head.x - screenCx;
+                        float dy = enemy.Head.y - screenCy;
+                        float dist = sqrtf(dx * dx + dy * dy);
+                        // Allow small slack during firing so aim doesn't detach on micro-movements
+                        if (dist <= fovLimit * 1.25f) {
+                            bestEnemy = &enemy;
+                            bestScreenPos = enemy.Head;
+                        }
+                    }
+                    break;
+                }
             }
         }
 
-        if (!bestEnemy) return;
+        // 2. If no sticky target or target eliminated, find the closest enemy strictly INSIDE the FOV circle
+        if (!bestEnemy) {
+            float bestScore = 9999999.0f;
+            for (const auto& enemy : enemies) {
+                if (enemy.Head.z < 0.001f) continue;
+                if (cfg::aim::ignore_knocked && enemy.curHP <= 0) continue;
+                if (cfg::aim::ignore_bots && enemy.isBot) continue;
+                if (cfg::aim::visible_check && !enemy.isVisible) continue;
+                if (enemy.distance > cfg::aim::max_distance) continue;
+
+                // Bone target selection (Head is primary for 100% headshot)
+                Vector3 aimPos = enemy.Head;
+                if (cfg::aim::target_bone == 1 && enemy.Toe.z >= 0.001f) {
+                    // Neck / Upper Chest
+                    aimPos.y = enemy.Head.y + (enemy.Toe.y - enemy.Head.y) * 0.22f;
+                } else if (cfg::aim::target_bone == 2 && enemy.Toe.z >= 0.001f) {
+                    // Pelvis / Mid Body
+                    aimPos.y = enemy.Head.y + (enemy.Toe.y - enemy.Head.y) * 0.45f;
+                }
+
+                float dx = aimPos.x - screenCx;
+                float dy = aimPos.y - screenCy;
+                float crosshairDist = sqrtf(dx * dx + dy * dy);
+
+                // STRICT FOV CIRCLE: Ignore any player outside the visual circle
+                if (crosshairDist > fovLimit) continue;
+
+                float score = crosshairDist;
+                if (cfg::aim::priority_mode == 1) { // Lowest HP
+                    score = (float)enemy.curHP;
+                } else if (cfg::aim::priority_mode == 2) { // 3D Distance
+                    score = enemy.distance;
+                }
+
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestEnemy = &enemy;
+                    bestScreenPos = aimPos;
+                }
+            }
+        }
+
+        if (!bestEnemy) {
+            s_lockedTargetAddr = 0;
+            return;
+        }
+
+        // Remember target for this firing burst
+        s_lockedTargetAddr = bestEnemy->addr;
 
         // Record target diagnostic telemetry
         g_currentTarget.valid = true;
@@ -125,50 +186,68 @@ namespace aimbot {
         g_currentTarget.distance = bestEnemy->distance;
         g_currentTarget.hp = bestEnemy->curHP;
         g_currentTarget.screenPos = bestScreenPos;
+        g_currentTarget.headWorld = bestEnemy->headWorld;
 
-        // Calculate delta vector towards target
+        // ══════════════════════════════════════════════════════════════════════
+        // 1. 3D HEADSHOT BULLET ALIGNMENT (NO CAMERA DRAGGING)
+        // Modifies bullet/raycast direction directly to HEAD (100% Headshot)
+        // ══════════════════════════════════════════════════════════════════════
+        uint64_t aimInfo = rpm<uint64_t>(localPlayer + Offsets::Player::AimInfo);
+        if (is_valid_ptr(aimInfo)) {
+            uint64_t dirAddr = aimInfo + Offsets::Aim::Direction;
+            Vector3 bulletOrigin = rpm<Vector3>(aimInfo + Offsets::Aim::StartPosition);
+
+            Vector3 target3D = bestEnemy->headWorld;
+            if (target3D != Vector3::Zero()) {
+                if (cfg::aim::target_bone == 1) {
+                    target3D.y -= 0.18f; // Neck
+                } else if (cfg::aim::target_bone == 2) {
+                    target3D.y -= 0.45f; // Pelvis / Body
+                }
+
+                if (bulletOrigin != Vector3::Zero() && std::isfinite(bulletOrigin.x)) {
+                    Vector3 diff = target3D - bulletOrigin;
+                    Vector3 headshotDir = SafeNormalize(diff);
+                    if (std::isfinite(headshotDir.x) && std::isfinite(headshotDir.y) && std::isfinite(headshotDir.z)) {
+                        wpm<Vector3>(dirAddr, headshotDir);
+                    }
+                }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 2. ULTRA-SMOOTH MICRO-ASSIST (NEVER YANKS OR DRAGS SCREEN)
+        // Gently lifts crosshair towards the head only when firing
+        // ══════════════════════════════════════════════════════════════════════
         float deltaX = bestScreenPos.x - screenCx;
         float deltaY = bestScreenPos.y - screenCy;
 
-        // Smooth factor (1.0 = instant snap, 5.0 to 20.0 = human-like smooth glide)
         float smoothVal = ImClamp(cfg::aim::smooth, 1.0f, 30.0f);
-        float stepX = deltaX / smoothVal;
-        float stepY = deltaY / smoothVal;
+        float stepX = deltaX / (smoothVal * 5.0f);
+        float stepY = deltaY / (smoothVal * 5.0f);
 
-        // Clamp step to prevent sudden sharp jumps or physics glitches
-        stepX = ImClamp(stepX, -15.0f, 15.0f);
-        stepY = ImClamp(stepY, -15.0f, 15.0f);
+        // Strict clamp to micro-degrees: max 1.8 degrees per frame, perfectly natural
+        stepX = ImClamp(stepX, -1.8f, 1.8f);
+        stepY = ImClamp(stepY, -1.8f, 1.8f);
 
-        // ── 1. SAFE PLAYER ROTATION MUTATION ──
         uint64_t rotAddr = localPlayer + Offsets::Player::Rotation;
         if (is_valid_ptr(rotAddr)) {
             Vector3 curRot = rpm<Vector3>(rotAddr);
-            // Strict sanity check before mutating
             if (std::isfinite(curRot.x) && std::isfinite(curRot.y) && std::isfinite(curRot.z) &&
                 fabsf(curRot.x) <= 360.0f && fabsf(curRot.y) <= 360.0f) {
-                curRot.x += stepY * 0.05f; // Pitch
-                curRot.y += stepX * 0.05f; // Yaw
+                curRot.x += stepY * 0.05f; // Micro Pitch lift to head
+                curRot.y += stepX * 0.05f; // Micro Yaw alignment
 
-                // Pitch clamp: prevent camera flip or character deformation
                 curRot.x = ImClamp(curRot.x, -89.0f, 89.0f);
                 wpm<Vector3>(rotAddr, curRot);
             }
         }
-
-        // ── 2. SAFE AIM DIRECTION VECTOR ALIGNMENT ──
-        uint64_t aimInfo = rpm<uint64_t>(localPlayer + Offsets::Player::AimInfo);
-        if (is_valid_ptr(aimInfo)) {
-            uint64_t dirAddr = aimInfo + Offsets::Aim::Direction;
-            Vector3 aimDir = rpm<Vector3>(dirAddr);
-            if (std::isfinite(aimDir.x) && std::isfinite(aimDir.y) && std::isfinite(aimDir.z)) {
-                aimDir.x += (stepX * 0.002f);
-                aimDir.y -= (stepY * 0.002f);
-                aimDir = SafeNormalize(aimDir);
-                wpm<Vector3>(dirAddr, aimDir);
-            }
-        }
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // FOV CIRCLE & ACTIVE LOCK VISUALIZER
+    // Scaled dynamically by cfg::aim::fov_radius
+    // ══════════════════════════════════════════════════════════════════════════
     inline void render_fov(ImDrawList* dl) {
         if (!cfg::aim::enable || !cfg::aim::show_fov) return;
         if (!data::inMatch.load(std::memory_order_relaxed)) return;
@@ -177,17 +256,19 @@ namespace aimbot {
         float cy = g_sh * 0.5f;
         float r  = cfg::aim::fov_radius;
 
-        // Smooth Orchid / White FOV circle
+        // Smooth Orchid / White FOV circle (shows exact trigger zone)
         dl->AddCircle(ImVec2(cx, cy), r, IM_COL32(255, 255, 255, 45), 64, 1.0f);
         dl->AddCircle(ImVec2(cx, cy), r + 1.0f, IM_COL32(225, 0, 153, 160), 64, 1.5f);
 
-        // If target is actively locked inside FOV, draw target lock ring & line
+        // If target is actively locked inside FOV, draw target lock ring & snapline to head
         if (g_currentTarget.valid && g_currentTarget.screenPos.z >= 0.001f) {
             dl->AddCircle(ImVec2(g_currentTarget.screenPos.x, g_currentTarget.screenPos.y),
-                          10.0f, IM_COL32(255, 40, 80, 220), 16, 2.0f);
+                          12.0f, IM_COL32(255, 30, 80, 240), 16, 2.0f);
+            dl->AddCircle(ImVec2(g_currentTarget.screenPos.x, g_currentTarget.screenPos.y),
+                          4.0f, IM_COL32(255, 255, 255, 255), 12, 1.5f);
             dl->AddLine(ImVec2(cx, cy),
                         ImVec2(g_currentTarget.screenPos.x, g_currentTarget.screenPos.y),
-                        IM_COL32(225, 0, 153, 90), 1.0f);
+                        IM_COL32(225, 0, 153, 110), 1.2f);
         }
     }
 

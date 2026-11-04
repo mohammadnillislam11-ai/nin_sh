@@ -8,6 +8,7 @@ struct PlayerData {
     // ── Box ──
     Vector3  Head;
     Vector3  Toe;
+    Vector3  headWorld;
 
     // ── Meta ──
     bool     isVisible;
@@ -24,7 +25,7 @@ struct PlayerData {
 
     PlayerData()
         : addr(0),
-          Head(Vector3::Zero()), Toe(Vector3::Zero()),
+          Head(Vector3::Zero()), Toe(Vector3::Zero()), headWorld(Vector3::Zero()),
           isVisible(false), isBot(false), distance(0.f),
           curHP(0), maxHP(200), curArmor(0),
           isFiring(false), isGrounded(true), speed(0.f),
