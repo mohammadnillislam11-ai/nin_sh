@@ -776,7 +776,7 @@ namespace ui::menu {
                 ImVec2 cp = ImGui::GetCursorScreenPos();
                 DrawLogoFlame(dl, ImVec2(cp.x + 18, cp.y + 12), 20.0f, theme_orchid::ColPrimary);
                 ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 40);
-                ImGui::TextColored(theme_orchid::ColPrimary, "NINMODS SECURITY GATE");
+                ImGui::TextColored(ImVec4(0.88f, 0.00f, 0.60f, 1.0f), "NINMODS SECURITY GATE");
                 ImGui::Separator();
                 ImGui::Dummy(ImVec2(0, 8));
 
@@ -910,7 +910,7 @@ namespace ui::menu {
                                           ImGuiWindowFlags_NoNav;
 
             if (ImGui::Begin("##RedirectToast", nullptr, toastFlags)) {
-                ImGui::TextColored(theme_orchid::ColPrimaryLight, "%s", toastText);
+                ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.80f, 1.0f), "%s", toastText);
             }
             ImGui::End();
 
