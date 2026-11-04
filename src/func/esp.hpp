@@ -109,12 +109,11 @@ namespace func::esp {
     }
 
     // ═══════════════════════════════════════════════════════
-    // NAME PANEL
+    // STYLE 09: TOP CLEAN NAME & DISTANCE (NO OVERLAP WITH TRACER)
     // ═══════════════════════════════════════════════════════
-    inline void drawNamePanel(ImDrawList* dl, const PlayerData& p,
-                              float cx, float top_y) {
-        if (!cfg::esp::name && !cfg::esp::distance &&
-            !cfg::esp::health && !cfg::esp::armor) return;
+    inline void drawTopInfo(ImDrawList* dl, const PlayerData& p,
+                            float cx, float top_y) {
+        if (!cfg::esp::name && !cfg::esp::distance) return;
 
         char nameBuf[24];
         truncName(p.name, nameBuf, sizeof(nameBuf));
@@ -124,98 +123,91 @@ namespace func::esp {
         char distBuf[16];
         fmtDist(p.distance, distBuf, sizeof(distBuf));
 
-        ImU32 nameCol = toU32(cfg::esp::name_col);
-        ImU32 distCol = toU32(cfg::esp::distance_col);
-        ImU32 visTag  = IM_COL32(30, 100, 220, 240);
-        ImU32 botTag  = IM_COL32(200, 40, 40, 240);
+        const char* tag = cfg::esp::bot_tag ? (p.isBot ? "AI " : "") : "";
+        char fullText[64];
+        if (cfg::esp::name && cfg::esp::distance) {
+            snprintf(fullText, sizeof(fullText), "%s%s  %s", tag, nameBuf, distBuf);
+        } else if (cfg::esp::name) {
+            snprintf(fullText, sizeof(fullText), "%s%s", tag, nameBuf);
+        } else {
+            snprintf(fullText, sizeof(fullText), "%s", distBuf);
+        }
 
-        const char* tag = cfg::esp::bot_tag ? (p.isBot ? "AI" : "PL") : nullptr;
-        ImU32 tagBg = p.isBot ? botTag : visTag;
+        const float fs = ESP_FONT_SIZE + 1.f;
+        ImVec2 ts = ImGui::CalcTextSize(fullText);
+        float tx = cx - ts.x * 0.5f;
+        float ty = top_y - ts.y - 8.f;
 
-        ImU32 bgMain    = p.isVisible ? IM_COL32(12, 12, 16, 235) : IM_COL32(35, 35, 42, 215);
-        ImU32 textColor = p.isVisible ? nameCol : withAlpha(nameCol, 0.65f);
+        // Shadow outline for crystal clear readability on any background
+        dl->AddText(ImGui::GetFont(), fs, {tx + 1.f, ty + 1.f}, IM_COL32(0, 0, 0, 240), fullText);
+        dl->AddText(ImGui::GetFont(), fs, {tx - 1.f, ty}, IM_COL32(0, 0, 0, 180), fullText);
+        dl->AddText(ImGui::GetFont(), fs, {tx + 1.f, ty}, IM_COL32(0, 0, 0, 180), fullText);
+        dl->AddText(ImGui::GetFont(), fs, {tx, ty - 1.f}, IM_COL32(0, 0, 0, 180), fullText);
+        dl->AddText(ImGui::GetFont(), fs, {tx, ty + 1.f}, IM_COL32(0, 0, 0, 180), fullText);
 
-        const float fs   = ESP_FONT_SIZE;
-        const float padX = 5.f;
-        const float padY = 2.f;
-        const float gap  = 3.f;
-
-        float tagW  = tag ? ImGui::CalcTextSize(tag).x + padX * 2.f : 0.f;
-        float nameW = cfg::esp::name
-                      ? ImGui::CalcTextSize(nameBuf).x + padX * 2.f : 0.f;
-        float distW = cfg::esp::distance
-                      ? ImGui::CalcTextSize(distBuf).x + padX * 2.f : 0.f;
-
-        float rowH = PANEL_ROW_H;
-        float totalW = tagW;
-        if (nameW > 0.f) totalW += (totalW > 0.f ? gap : 0.f) + nameW;
-        if (distW > 0.f) totalW += (totalW > 0.f ? gap : 0.f) + distW;
-        if (totalW <= 0.f) return;
-
-        float bx = cx - totalW * 0.5f;
-        float by = top_y - rowH - PANEL_TOP_OFFSET;
-
-        dl->AddRectFilled({bx + 1, by + 1}, {bx + totalW + 1, by + rowH + 1},
-                          C_SHADOW, 4.f);
-        dl->AddRectFilled({bx, by}, {bx + totalW, by + rowH}, bgMain, 4.f);
-        dl->AddRect({bx, by}, {bx + totalW, by + rowH}, C_BORDER, 4.f, 0, 1.f);
-
-        float cursorX = bx;
-
-        if (tag) {
-            dl->AddRectFilled({cursorX, by}, {cursorX + tagW, by + rowH},
-                              withAlpha(tagBg, p.isVisible ? 1.f : 0.65f),
-                              4.f, ImDrawFlags_RoundCornersLeft);
-            ImVec2 ts = ImGui::CalcTextSize(tag);
-            dl->AddText(ImGui::GetFont(), fs,
-                {cursorX + (tagW - ts.x) * 0.5f, by + padY},
-                IM_COL32(255, 255, 255, 255), tag);
-            cursorX += tagW;
+        float curX = tx;
+        if (tag[0] != 0) {
+            ImVec2 tagSize = ImGui::CalcTextSize(tag);
+            ImU32 tagCol = p.isBot ? IM_COL32(255, 75, 75, 255) : IM_COL32(0, 200, 255, 255);
+            dl->AddText(ImGui::GetFont(), fs, {curX, ty}, tagCol, tag);
+            curX += tagSize.x;
         }
 
         if (cfg::esp::name) {
-            if (tag) cursorX += gap;
-            ImVec2 ts = ImGui::CalcTextSize(nameBuf);
-            dl->AddText(ImGui::GetFont(), fs,
-                {cursorX + (nameW - ts.x) * 0.5f, by + padY},
-                textColor, nameBuf);
-            cursorX += nameW;
+            ImVec2 nSize = ImGui::CalcTextSize(nameBuf);
+            ImU32 nCol = p.isVisible ? toU32(cfg::esp::name_col) : withAlpha(toU32(cfg::esp::name_col), 0.75f);
+            dl->AddText(ImGui::GetFont(), fs, {curX, ty}, nCol, nameBuf);
+            curX += nSize.x;
         }
 
         if (cfg::esp::distance) {
-            if (cursorX > bx) cursorX += gap;
-            ImVec2 ts = ImGui::CalcTextSize(distBuf);
-            ImU32 dCol = p.isVisible ? distCol : withAlpha(distCol, 0.65f);
-            dl->AddText(ImGui::GetFont(), fs,
-                {cursorX + (distW - ts.x) * 0.5f, by + padY}, dCol, distBuf);
+            if (cfg::esp::name) curX += ImGui::CalcTextSize("  ").x;
+            ImU32 dCol = p.isVisible ? toU32(cfg::esp::distance_col) : withAlpha(toU32(cfg::esp::distance_col), 0.75f);
+            dl->AddText(ImGui::GetFont(), fs, {curX, ty}, dCol, distBuf);
         }
+    }
 
-        float barY = by + rowH + 2.f;
-        float barH = 3.f;
-        float barOffset = 0.f;
+    // ═══════════════════════════════════════════════════════
+    // STYLE 09: VERTICAL (LOMBA) HEALTH BAR ON RIGHT SIDE
+    // ═══════════════════════════════════════════════════════
+    inline void drawSideHealthBar(ImDrawList* dl, const PlayerData& p, ImVec2 tl, ImVec2 br) {
+        if (!cfg::esp::health && !cfg::esp::armor) return;
+
+        float boxH = br.y - tl.y;
+        if (boxH <= 4.f) return;
+
+        // Positioned on the RIGHT side of the chaturbhuj box (Style 09)
+        float barX = br.x + 5.f;
+        float barW = 4.f;
 
         if (cfg::esp::health) {
             float hp01 = p.maxHP > 0 ? (float)p.curHP / (float)p.maxHP : 0.f;
             hp01 = ImClamp(hp01, 0.f, 1.f);
 
-            dl->AddRectFilled({bx, barY}, {bx + totalW, barY + barH},
-                              IM_COL32(0, 0, 0, 210), barH * 0.5f);
-            dl->AddRectFilled({bx, barY}, {bx + totalW * hp01, barY + barH},
-                              hpColor(hp01), barH * 0.5f);
-            dl->AddRect({bx, barY}, {bx + totalW, barY + barH},
-                        C_BORDER, barH * 0.5f, 0, 1.f);
-            barOffset = barH + 1.f;
+            // Background track + border
+            dl->AddRectFilled({barX - 1.f, tl.y - 1.f}, {barX + barW + 1.f, br.y + 1.f},
+                              IM_COL32(10, 14, 20, 220), 1.5f);
+            dl->AddRect({barX - 1.f, tl.y - 1.f}, {barX + barW + 1.f, br.y + 1.f},
+                        IM_COL32(0, 0, 0, 180), 1.5f, 0, 1.f);
+
+            // Health fill (bottom up with dynamic color)
+            float fillH = boxH * hp01;
+            dl->AddRectFilled({barX, br.y - fillH}, {barX + barW, br.y},
+                              hpColor(hp01), 1.0f);
         }
 
         if (cfg::esp::armor && p.curArmor > 0) {
+            float armX = barX + (cfg::esp::health ? (barW + 3.f) : 0.f);
+            float armW = 2.5f;
             float arm01 = ImClamp((float)p.curArmor / 100.f, 0.f, 1.f);
-            float armY  = barY + barOffset;
-            float armH  = 2.5f;
+            float fillArm = boxH * arm01;
 
-            dl->AddRectFilled({bx, armY}, {bx + totalW, armY + armH},
-                              IM_COL32(0, 0, 0, 210), armH * 0.5f);
-            dl->AddRectFilled({bx, armY}, {bx + totalW * arm01, armY + armH},
-                              armorColor(arm01), armH * 0.5f);
+            dl->AddRectFilled({armX - 1.f, tl.y - 1.f}, {armX + armW + 1.f, br.y + 1.f},
+                              IM_COL32(10, 14, 20, 220), 1.f);
+            dl->AddRect({armX - 1.f, tl.y - 1.f}, {armX + armW + 1.f, br.y + 1.f},
+                        IM_COL32(0, 0, 0, 180), 1.f, 0, 1.f);
+            dl->AddRectFilled({armX, br.y - fillArm}, {armX + armW, br.y},
+                              armorColor(arm01), 1.0f);
         }
     }
 
@@ -245,10 +237,11 @@ namespace func::esp {
                 dl->AddLine(s[0], s[1], col, thick);
             }
         } else if (type == 1) {
-            dl->AddRect({tl.x + 2, tl.y + 2}, {br.x + 2, br.y + 2},
-                        IM_COL32(0, 0, 0, 120), round, 0, thick + 3.f);
-            dl->AddRect(tl, br, withAlpha(col, 0.35f), round, 0, thick + 2.f);
+            // Full Chaturbhuj (Rectangular) Box: Outer shadow, crisp border, subtle inner fill
+            dl->AddRect({tl.x - 1.f, tl.y - 1.f}, {br.x + 1.f, br.y + 1.f},
+                        IM_COL32(0, 0, 0, 180), round, 0, thick + 1.5f);
             dl->AddRect(tl, br, col, round, 0, thick);
+            dl->AddRectFilled(tl, br, withAlpha(col, 0.05f), round);
         } else {
             dl->AddRect(tl, br, withAlpha(col, 0.18f), round, 0, thick + 5.f);
             dl->AddRect(tl, br, withAlpha(col, 0.45f), round, 0, thick + 2.f);
@@ -444,14 +437,14 @@ namespace func::esp {
             if (cfg::esp::firing_ind)
                 drawFiring(dl, p, cx, tl.y);
 
-            if (cfg::esp::name || cfg::esp::distance ||
-                cfg::esp::health || cfg::esp::armor) {
-                PlayerData tmp = p;
-                if (tmp.name[0] == 0)
-                    snprintf(tmp.name, sizeof(tmp.name), "%s",
-                             p.isBot ? "BOT" : "Player");
-                drawNamePanel(dl, tmp, cx, tl.y);
-            }
+            // Style 09: Clean top info + Right side vertical health bar
+            PlayerData tmp = p;
+            if (tmp.name[0] == 0)
+                snprintf(tmp.name, sizeof(tmp.name), "%s",
+                         p.isBot ? "BOT" : "Player");
+
+            drawTopInfo(dl, tmp, cx, tl.y);
+            drawSideHealthBar(dl, tmp, tl, br);
 
             if (cfg::esp::weapon)
                 drawWeapon(dl, p, {cx, br.y});

@@ -5,7 +5,7 @@ namespace cfg {
 namespace esp {
     // ── Master ──
     inline bool  box          = true;
-    inline int   box_type     = 3;
+    inline int   box_type     = 1; // 1 = Full Chaturbhuj (Rectangular) Box
     inline bool  name         = true;
     inline bool  health       = true;
     inline bool  armor        = true;
