@@ -605,9 +605,9 @@ namespace ui::menu {
                             if (p.curHP <= 0) continue; // Skip dead players
                             if (p.distance < minDist) {
                                 minDist = p.distance;
-                                targetName = p.name[0] ? p.name : (p.isBot ? "BOT" : "Player");
+                                targetName = (p.name[0] != '\0') ? std::string(p.name) : (p.isBot ? "BOT" : "Player");
                                 targetDist = p.distance;
-                                targetHP = p.curHP;
+                                targetHP = static_cast<int>(p.curHP);
                                 targetFound = true;
                             }
                         }
@@ -616,7 +616,7 @@ namespace ui::menu {
                     if (targetFound) {
                         ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "Active Target: %s", targetName.c_str());
                         ImGui::Text("Target Distance: %.1f m", targetDist);
-                        ImGui::Text("Target Health: %d HP", targetHP);
+                        ImGui::Text("Target Health: %d HP", static_cast<int>(targetHP));
                     } else {
                         ImGui::TextDisabled("Active Target: None (Scanning)");
                         ImGui::TextDisabled("Target Distance: -- m");
@@ -662,7 +662,7 @@ namespace ui::menu {
                     cdl->AddLine(ImVec2(rpos.x, rpos.y - 4), ImVec2(rpos.x + 115, rpos.y - 4), theme_orchid::ColPrimary, 2.0f);
                     ImGui::Dummy(ImVec2(0, 4));
 
-                    ImGui::Text("Target PID: %d", proc::pid);
+                    ImGui::Text("Target PID: %d", static_cast<int>(proc::pid));
 
                     // Separate clean format if/else without ternary format mismatches
                     if (proc::lib) {
