@@ -431,10 +431,11 @@ namespace func::esp {
             if (cfg::esp::tracer) {
                 ImVec2 head(p.Head.x, p.Head.y);
                 float aa = ImClamp(1.f - p.distance / cfg::esp::max_range, 0.25f, 1.f);
+                // Sleek, refined tracer line (slightly thinner laser look)
                 dl->AddLine(anchor, head,
-                    withAlpha(toU32(cfg::esp::box_col), 0.35f * aa), 4.f);
+                    withAlpha(toU32(cfg::esp::box_col), 0.25f * aa), 2.6f);
                 dl->AddLine(anchor, head,
-                    withAlpha(toU32(cfg::esp::box_col), 0.95f * aa), 1.8f);
+                    withAlpha(toU32(cfg::esp::box_col), 0.95f * aa), 1.2f);
             }
 
             if (cfg::esp::box)
