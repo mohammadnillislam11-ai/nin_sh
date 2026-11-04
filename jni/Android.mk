@@ -52,7 +52,9 @@ LOCAL_C_INCLUDES := \
     $(LOCAL_PATH)/../src/game \
     $(LOCAL_PATH)/../src/other \
     $(LOCAL_PATH)/../src/protect \
-    $(LOCAL_PATH)/../src/shadowhook
+    $(LOCAL_PATH)/../src/shadowhook \
+    $(LOCAL_PATH)/../src/offsets \
+    $(LOCAL_PATH)/../src/aim
 
 # ═══════════════════════════════════════════════════════════
 #  C++ FLAGS

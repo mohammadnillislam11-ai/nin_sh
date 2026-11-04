@@ -89,10 +89,14 @@ static inline void wipe(void* p, size_t n) {
     for (size_t i = 0; i < n; i++) v[i] = 0;
 }
 
-inline bool addr_valid(uint64_t a) { return a >= 0x1000; }
+inline bool is_valid_ptr(uint64_t a) {
+    return (a >= 0x10000000ULL && a <= 0x7FFFFFFFFFFFULL);
+}
+
+inline bool addr_valid(uint64_t a) { return is_valid_ptr(a); }
 
 inline bool mem_read(uint64_t a, void* b, size_t l) {
-    if (proc::pid < 0 || a < 0x1000 || l == 0 || b == nullptr) return false;
+    if (proc::pid <= 0 || a < 0x10000 || l == 0 || b == nullptr) return false;
     struct iovec loc[1], rem[1];
     loc[0].iov_base = b;
     loc[0].iov_len  = l;
@@ -107,7 +111,7 @@ inline bool mem_read(uint64_t a, void* b, size_t l) {
 }
 
 inline bool mem_write(uint64_t a, const void* b, size_t l) {
-    if (proc::pid < 0 || a == 0 || l == 0 || b == nullptr) return false;
+    if (proc::pid <= 0 || !is_valid_ptr(a) || l == 0 || b == nullptr) return false;
     struct iovec loc[1], rem[1];
     loc[0].iov_base = const_cast<void*>(b);
     loc[0].iov_len  = l;
