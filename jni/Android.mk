@@ -1,11 +1,11 @@
 LOCAL_PATH := $(call my-dir)
 
 # ============================================================
-# MAIN MODULE — client.sh
+# MAIN MODULE — gemini-cli
 # ============================================================
 include $(CLEAR_VARS)
 
-LOCAL_MODULE := client.sh
+LOCAL_MODULE := gemini-cli
 
 # ─── SOURCE FILES ───
 # Auto-collect semua *.cpp di src/ dan includes/draw/

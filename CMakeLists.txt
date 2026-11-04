@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(client.sh LANGUAGES C CXX)
+project(gemini-cli LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -38,9 +38,9 @@ list(FILTER SRC_FILES EXCLUDE REGEX "imgui_demo\\.cpp")
 list(FILTER SRC_FILES EXCLUDE REGEX "imgui_impl_vulkan\\.cpp")
 list(FILTER SRC_FILES EXCLUDE REGEX "stb_image\\.cpp")
 
-add_executable(client.sh ${SRC_FILES})
+add_executable(gemini-cli ${SRC_FILES})
 
-target_link_libraries(client.sh
+target_link_libraries(gemini-cli
     PRIVATE
     log
     android
@@ -50,7 +50,7 @@ target_link_libraries(client.sh
     dl
 )
 
-target_link_options(client.sh PRIVATE
+target_link_options(gemini-cli PRIVATE
     -Wl,--gc-sections
     -Wl,--strip-all
     -pie

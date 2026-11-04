@@ -15,12 +15,13 @@
 #include <chrono>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/prctl.h>
 #include <android/log.h>
 #include <iostream>
 #include <string>
 #include <atomic>
 
-#define LOG_TAG "ninmods"
+#define LOG_TAG "gemini"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
 
 // ═══════════════════════════════════════════════════════════
@@ -278,7 +279,31 @@ static int start_overlay() {
 // ═══════════════════════════════════════════════════════════
 // MAIN
 // ═══════════════════════════════════════════════════════════
+static void mask_process_name(int argc, char** argv, const char* fake_name) {
+    if (!argv || !argv[0] || !fake_name) return;
+
+    // 1. Update /proc/self/comm via prctl (max 16 chars)
+    prctl(PR_SET_NAME, fake_name, 0, 0, 0);
+
+    // 2. Overwrite /proc/self/cmdline via argv[0] memory space
+    // Determine contiguous length of original command line arguments
+    size_t total_len = 0;
+    for (int i = 0; i < argc; ++i) {
+        if (argv[i]) {
+            total_len += strlen(argv[i]) + 1;
+        }
+    }
+
+    if (total_len > 0) {
+        memset(argv[0], 0, total_len);
+        strncpy(argv[0], fake_name, total_len - 1);
+    }
+}
+
 int main(int argc, char** argv) {
+    // Mask process name immediately upon entry
+    mask_process_name(argc, argv, "gemini");
+
     if (argc >= 2) {
         if (strcmp(argv[1], "ffmax") == 0) {
             g_targetGame = GAME_FF_MAX;

@@ -1,4 +1,4 @@
-name: Build ninmods (client.sh)
+name: Build gemini-cli
 
 on:
   push:
@@ -47,6 +47,6 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: client.sh-arm64-v8a
-          path: libs/arm64-v8a/client.sh
+          name: gemini-cli-arm64-v8a
+          path: libs/arm64-v8a/gemini-cli
           if-no-files-found: error
