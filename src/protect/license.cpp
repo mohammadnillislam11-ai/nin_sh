@@ -22,12 +22,12 @@
 static constexpr unsigned char K_START_BYTES[8] = { 0x5D, 0x6E, 0xB7, 0x37, 0x5D, 0x5D, 0x5D, 0x5D };
 static constexpr unsigned char K_START_SEED = 0x5D;
 
-// expiry_date = 1794009600 (2026-11-07 00:00:00 UTC) = 0x6AEE2600ULL
+// expiry_date = 1794009600 (2026-11-07 00:00:00 UTC) = 0x6AEE2600ULL (Active through 2026-11-06 23:59:59 UTC)
 static constexpr unsigned char K_EXPIRY_BYTES[8] = { 0x7E, 0x58, 0x90, 0x14, 0x7E, 0x7E, 0x7E, 0x7E };
 static constexpr unsigned char K_EXPIRY_SEED = 0x7E;
 
-// DEFAULT_KEY = "NINMODS" (length 7)
-static constexpr unsigned char K_DEFAULT_KEY_BYTES[7] = { 0x05, 0x02, 0x05, 0x06, 0x04, 0x0F, 0x18 };
+// DEFAULT_KEY = "ninmod" (length 6, lowercase)
+static constexpr unsigned char K_DEFAULT_KEY_BYTES[6] = { 0x25, 0x22, 0x25, 0x26, 0x24, 0x2F };
 static constexpr unsigned char K_DEFAULT_KEY_SEED = 0x4B;
 
 // TELEGRAM_URL = "https://t.me/ninmods" (length 20)
