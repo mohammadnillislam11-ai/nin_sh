@@ -580,10 +580,15 @@ namespace ui::menu {
                     ImGui::TextDisabled("Aim Trigger Condition");
 
                     ImGui::Dummy(ImVec2(0, 4));
-                    const char* boneTargets[] = { "Head (100% Headshot)", "Neck / Upper Chest", "Pelvis / Body" };
+                    const char* boneTargets[] = { "Head (Auto Drag)", "Neck / Upper Chest", "Pelvis / Body" };
                     ImGui::SetNextItemWidth(-1);
                     ImGui::Combo("##AimBone", &cfg::aim::target_bone, boneTargets, 3);
                     ImGui::TextDisabled("Target Aim Bone");
+
+                    ImGui::Dummy(ImVec2(0, 4));
+                    ImGui::SetNextItemWidth(-1);
+                    ImGui::SliderFloat("##HeadshotRate", &cfg::aim::headshot_rate, 0.0f, 100.0f, "%.0f%%");
+                    ImGui::TextDisabled("Headshot Rate Percentage (0%% - 100%%)");
 
                     ImGui::Dummy(ImVec2(0, 4));
                     const char* priorityModes[] = { "Crosshair Distance", "Lowest Health", "3D Distance" };

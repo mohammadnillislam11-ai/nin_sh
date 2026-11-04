@@ -239,8 +239,13 @@ namespace aimbot {
                 } else if (cfg::aim::target_bone == 2) {
                     baseOffset = 0.45f; // Body
                 } else {
-                    // Head mode: natural drag starting from chest (-0.26m) lifting to 0.0m (Head)
-                    baseOffset = (1.0f - smoothCurve) * 0.26f;
+                    // Head mode: natural drag starting from chest (-0.26m) lifting towards Head (0.0m)
+                    // Scaled dynamically by cfg::aim::headshot_rate:
+                    // At 100% rate: fully climbs to 0.0m (Head)
+                    // At 50% rate: climbs halfway to upper chest/neck (-0.18m)
+                    // At 0% rate: stays centered on torso (-0.36m, pure body shots)
+                    float targetHeightOffset = (1.0f - (cfg::aim::headshot_rate * 0.01f)) * 0.36f;
+                    baseOffset = targetHeightOffset + ((1.0f - smoothCurve) * 0.26f);
                 }
 
                 target3D.y -= baseOffset;

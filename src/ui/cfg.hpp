@@ -45,6 +45,7 @@ namespace aim {
     inline bool  show_fov         = false;
     inline float fov_radius       = 180.0f;
     inline float smooth           = 6.0f;
+    inline float headshot_rate    = 100.0f; // 0% to 100% (Adjustable headshot connection rate)
     inline int   target_bone      = 0; // 0 = Head, 1 = Neck/Chest, 2 = Pelvis/Body
     inline int   trigger_mode     = 0; // 0 = When Firing, 1 = Always In FOV
     inline int   priority_mode    = 0; // 0 = Crosshair Distance, 1 = Low HP, 2 = 3D Distance
