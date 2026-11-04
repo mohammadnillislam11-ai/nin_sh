@@ -1,6 +1,7 @@
 // ZqwClient — ninmods PROJECT
 #include "Android_draw/draw.h"
 #include "ui/menu.hpp"
+#include "ui/license.hpp"
 #include "other/memory.hpp"
 #include "game/data.hpp"
 #include "game/Offsets.h"
@@ -8,6 +9,8 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <cctype>
+#include <ctime>
 #include <thread>
 #include <chrono>
 #include <unistd.h>
@@ -80,10 +83,82 @@ static int wait_for_game() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// BANNER
+// VIP DASHBOARD & LICENSE SECURITY GATE
 // ═══════════════════════════════════════════════════════════
-static void print_banner() {
-    printf(FG_BCYAN BOLD "\n  >> ninmods External Panel | Free Fire VIP <<\n\n" RST);
+static void print_dashboard() {
+    printf(FG_BCYAN BOLD "\n  ╔═══════════════════════════════════════════════════════════╗\n" RST);
+    printf(FG_BCYAN BOLD "  ║" FG_BWHITE BOLD "              ninmods External Panel | VIP                 " FG_BCYAN BOLD "║\n" RST);
+    printf(FG_BCYAN BOLD "  ╠═══════════════════════════════════════════════════════════╣\n" RST);
+    printf(FG_BCYAN BOLD "  ║" FG_BWHITE "  Target Game    : " FG_BYELLOW "%-41s" FG_BCYAN BOLD "║\n" RST,
+           (g_targetGame == GAME_FF) ? "Free Fire (com.dts.freefireth)" : "Free Fire MAX (com.dts.freefiremax)");
+    printf(FG_BCYAN BOLD "  ║" FG_BWHITE "  License Status : " FG_BGREEN BOLD "%-41s" FG_BCYAN BOLD "║\n" RST,
+           lic::status_text());
+    printf(FG_BCYAN BOLD "  ║" FG_BWHITE "  Active Window  : " FG_BWHITE "%-41s" FG_BCYAN BOLD "║\n" RST,
+           "2026-11-04 to 2026-11-06 (UTC)");
+    printf(FG_BCYAN BOLD "  ║" FG_BWHITE "  Expiry Date    : " FG_BYELLOW "%-41s" FG_BCYAN BOLD "║\n" RST,
+           "2026-11-07 00:00:00 UTC");
+    printf(FG_BCYAN BOLD "  ║" FG_BWHITE "  Official TG    : " FG_BCYAN "%-41s" FG_BCYAN BOLD "║\n" RST,
+           "https://t.me/ninmods");
+    printf(FG_BCYAN BOLD "  ╚═══════════════════════════════════════════════════════════╝\n\n" RST);
+    fflush(stdout);
+}
+
+static bool check_license_gate() {
+    lic::init();
+
+    printf(FG_BCYAN BOLD "\n  ═══════════════════════════════════════════════════════════\n" RST);
+    printf(FG_BWHITE BOLD "               ninmods VIP — Security Gate\n" RST);
+    printf(FG_BCYAN BOLD "  ═══════════════════════════════════════════════════════════\n" RST);
+
+    time_t now = time(nullptr);
+    time_t t_start = lic::start_date();
+    time_t t_exp   = lic::expiry_date();
+
+    if (now < t_start) {
+        printf(FG_BYELLOW BOLD "\n  [!] STATUS: COMING SOON\n" RST);
+        printf(FG_BWHITE "      Access opens on: 2026-11-04 00:00:00 UTC\n" RST);
+        printf(FG_BCYAN "      Official Telegram: https://t.me/ninmods\n\n" RST);
+        return false;
+    }
+
+    if (now >= t_exp) {
+        printf(FG_BRED BOLD "\n  [!] STATUS: EXPIRED\n" RST);
+        printf(FG_BWHITE "      Access window closed on: 2026-11-07 00:00:00 UTC\n" RST);
+        printf(FG_BCYAN "      Official Telegram: https://t.me/ninmods\n\n" RST);
+    }
+
+    // Always prompt for key in terminal
+    printf(FG_BWHITE "\n  [?] Enter License Key: " RST);
+    fflush(stdout);
+
+    char key_input[128] = {0};
+    if (fgets(key_input, sizeof(key_input), stdin)) {
+        size_t len = strlen(key_input);
+        while (len > 0 && (key_input[len - 1] == '\n' || key_input[len - 1] == '\r' || key_input[len - 1] == ' ' || key_input[len - 1] == '\t')) {
+            key_input[len - 1] = '\0';
+            len--;
+        }
+    }
+
+    bool key_ok = false;
+    if (strlen(key_input) > 0) {
+        key_ok = lic::set_key(key_input);
+    } else if (lic::is_valid()) {
+        key_ok = true;
+    }
+
+    if (!key_ok || !lic::is_valid()) {
+        if (now >= t_exp) {
+            printf(FG_BRED "\n  [-] License has expired!\n" RST);
+            printf(FG_BCYAN "  [*] For renewals & updates: " FG_BYELLOW "https://t.me/ninmods\n\n" RST);
+        } else {
+            printf(FG_BRED "\n  [-] Authentication failed: Invalid license key.\n" RST);
+            printf(FG_BCYAN "  [*] Official Telegram: " FG_BYELLOW "https://t.me/ninmods\n\n" RST);
+        }
+        return false;
+    }
+
+    return true;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -208,14 +283,17 @@ static int start_overlay() {
 // MAIN
 // ═══════════════════════════════════════════════════════════
 int main(int argc, char** argv) {
-    print_banner();
-
     if (argc >= 2) {
         if (strcmp(argv[1], "ffmax") == 0) {
             g_targetGame = GAME_FF_MAX;
-            printf(FG_BGREEN "  [+] Target: " FG_BYELLOW "Free Fire MAX\n" RST);
         }
     }
+
+    if (!check_license_gate()) {
+        return 1;
+    }
+
+    print_dashboard();
 
     return start_overlay();
 }
