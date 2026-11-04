@@ -13,6 +13,11 @@
 
 using namespace ImGui;
 
+// Forward-declare Dear ImGui's ClearActiveID to cancel active widgets during scroll
+namespace ImGui {
+    IMGUI_API void ClearActiveID();
+}
+
 extern bool main_thread_flag;
 static int activeTab = 0;
 static float ui_opacity = 1.0f;
@@ -179,6 +184,9 @@ static void handleTouchScroll() {
             }
 
             if (s_gesture == GESTURE_VERTICAL) {
+                // Clear any active widget (slider, checkbox) so it cannot mutate during scroll
+                ImGui::ClearActiveID();
+
                 float delta_y = io.MouseDelta.y;
                 if (std::abs(delta_y) > 0.01f) {
                     ImGui::SetScrollY(ImGui::GetScrollY() - delta_y);
@@ -234,16 +242,27 @@ namespace ui::menu {
         if (!menu_open) {
             const float pillW = 136.0f;
             const float pillH = 44.0f;
+            const float minX = 10.0f;
+            const float maxX = (realW - pillW - 10.0f > minX) ? (realW - pillW - 10.0f) : minX;
+            const float minY = 10.0f;
+            const float maxY = (realH - pillH - 10.0f > minY) ? (realH - pillH - 10.0f) : minY;
+
             float pillInitX = (realW > 1000.0f) ? 60.0f : 30.0f;
             float pillInitY = 32.0f;
 
-            if (pill_needs_reposition) {
-                // Re-anchor pill cleanly to safe screen coordinate upon rotation
-                ImGui::SetNextWindowPos(ImVec2(pillInitX, pillInitY), ImGuiCond_Always);
+            static ImVec2 s_pill_pos = ImVec2(-1, -1);
+            if (s_pill_pos.x < 0.0f || pill_needs_reposition) {
+                s_pill_pos = ImVec2(pillInitX, pillInitY);
                 pill_needs_reposition = false;
-            } else {
-                ImGui::SetNextWindowPos(ImVec2(pillInitX, pillInitY), ImGuiCond_FirstUseEver);
             }
+
+            // Continuous hard clamp within screen bounds
+            if (s_pill_pos.x < minX) s_pill_pos.x = minX;
+            if (s_pill_pos.x > maxX) s_pill_pos.x = maxX;
+            if (s_pill_pos.y < minY) s_pill_pos.y = minY;
+            if (s_pill_pos.y > maxY) s_pill_pos.y = maxY;
+
+            ImGui::SetNextWindowPos(s_pill_pos, ImGuiCond_Always);
             ImGui::SetNextWindowSize(ImVec2(pillW, pillH));
 
             ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.082f, 0.063f, 0.122f, 0.95f));
@@ -252,25 +271,28 @@ namespace ui::menu {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.5f);
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
 
-            if (ImGui::Begin("##NIN_MINI", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar)) {
+            ImGuiWindowFlags pillFlags = ImGuiWindowFlags_NoTitleBar |
+                                         ImGuiWindowFlags_NoResize |
+                                         ImGuiWindowFlags_NoScrollbar |
+                                         ImGuiWindowFlags_NoMove;
+
+            if (ImGui::Begin("##NIN_MINI", nullptr, pillFlags)) {
                 ImVec2 avail = ImGui::GetContentRegionAvail();
                 bool clicked = ImGui::InvisibleButton("##ReOpenPill", avail);
 
                 static bool pill_was_dragged = false;
 
-                // Dragging logic
+                // Dragging logic with instant delta update and boundary clamping
                 if (ImGui::IsItemActive()) {
                     if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
                         pill_was_dragged = true;
-                        ImVec2 curPos = ImGui::GetWindowPos();
-                        curPos.x += io.MouseDelta.x;
-                        curPos.y += io.MouseDelta.y;
-                        // Safe edge clamping within visible screen limits
-                        if (curPos.x < 10.0f) curPos.x = 10.0f;
-                        if (curPos.x > realW - pillW - 10.0f) curPos.x = realW - pillW - 10.0f;
-                        if (curPos.y < 10.0f) curPos.y = 10.0f;
-                        if (curPos.y > realH - pillH - 10.0f) curPos.y = realH - pillH - 10.0f;
-                        ImGui::SetWindowPos(curPos);
+                        s_pill_pos.x += io.MouseDelta.x;
+                        s_pill_pos.y += io.MouseDelta.y;
+
+                        if (s_pill_pos.x < minX) s_pill_pos.x = minX;
+                        if (s_pill_pos.x > maxX) s_pill_pos.x = maxX;
+                        if (s_pill_pos.y < minY) s_pill_pos.y = minY;
+                        if (s_pill_pos.y > maxY) s_pill_pos.y = maxY;
                     }
                 }
 
