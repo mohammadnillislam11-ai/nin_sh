@@ -17,6 +17,7 @@ extern bool main_thread_flag;
 static int activeTab = 0;
 static float ui_opacity = 1.0f;
 static bool menu_open = true;
+static bool g_should_exit = false;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DESIGN 08: ELECTRIC ORCHID GLASS — EXACT COLOR DEFINITIONS
@@ -142,20 +143,10 @@ static bool DrawSidebarIconButton(const char* str_id, EIconType icon_type, bool 
 namespace ui::menu {
 
     void render() {
-        // Safe exit helper lambda (Single source of truth)
-        auto safeExit = []() {
-            main_thread_flag = false;
-            Touch_Close();
-            data::thread_stop();
-            shutdown();
-            exit(0);
-        };
-
-        // Always render ESP overlays on the background
+        // Always render ESP overlays on the background first
         func::esp::draw();
 
         ImGuiIO& io = ImGui::GetIO();
-        ImGui::GetStyle().Alpha = ui_opacity;
 
         float realW = (float)displayInfo.width;
         float realH = (float)displayInfo.height;
@@ -166,7 +157,10 @@ namespace ui::menu {
         // FLOATING RE-OPEN PILL (SHOWN ONLY WHEN MENU IS MINIMIZED)
         // ══════════════════════════════════════════════════════════════════════
         if (!menu_open) {
-            ImGui::SetNextWindowPos(ImVec2(40, 40), ImGuiCond_FirstUseEver);
+            // Safe initial position away from camera notches and status bars
+            float pillInitX = (realW > 1000.0f) ? 60.0f : 30.0f;
+            float pillInitY = 32.0f;
+            ImGui::SetNextWindowPos(ImVec2(pillInitX, pillInitY), ImGuiCond_FirstUseEver);
             ImGui::SetNextWindowSize(ImVec2(136, 44));
 
             ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.082f, 0.063f, 0.122f, 0.95f));
@@ -224,6 +218,8 @@ namespace ui::menu {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.988f, 0.973f, 1.000f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_TextDisabled, ImVec4(0.608f, 0.549f, 0.706f, 1.0f));
 
+        // Window-scoped Alpha without mutating global ImGuiStyle
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ui_opacity);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.5f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -318,7 +314,7 @@ namespace ui::menu {
                 // Bottom Safe Exit Icon (Anchored precisely to bottom edge)
                 ImGui::SetCursorPos(ImVec2(5.0f, bodyH - 52.0f));
                 if (DrawSidebarIconButton("##TabPower", ICON_POWER, false, btnSize)) {
-                    safeExit();
+                    g_should_exit = true; // Signal exit cleanly outside ImGui frame
                 }
             }
             ImGui::EndChild();
@@ -440,7 +436,7 @@ namespace ui::menu {
 
                     ImGui::Dummy(ImVec2(0, 10));
 
-                    // Live target finder from data::players
+                    // Live target finder from data::players with dead player filter
                     std::string targetName = "None";
                     float targetDist = 0.0f;
                     int targetHP = 0;
@@ -452,6 +448,7 @@ namespace ui::menu {
                         for (const auto& p : data::players) {
                             if (p.Head.z < 0.001f || p.Toe.z < 0.001f) continue;
                             if (p.isBot && cfg::esp::ignore_bots) continue;
+                            if (p.curHP <= 0) continue; // Skip dead players
                             if (p.distance < minDist) {
                                 minDist = p.distance;
                                 targetName = p.name[0] ? p.name : (p.isBot ? "BOT" : "Player");
@@ -487,9 +484,7 @@ namespace ui::menu {
                     cdl->AddLine(ImVec2(lpos.x, lpos.y - 4), ImVec2(lpos.x + 105, lpos.y - 4), theme_orchid::ColPrimary, 2.0f);
                     ImGui::Dummy(ImVec2(0, 4));
 
-                    if (ImGui::SliderFloat("##Opacity", &ui_opacity, 0.2f, 1.0f, "Opacity: %.2f")) {
-                        ImGui::GetStyle().Alpha = ui_opacity;
-                    }
+                    ImGui::SliderFloat("##Opacity", &ui_opacity, 0.2f, 1.0f, "Opacity: %.2f");
 
                     ImGui::Dummy(ImVec2(0, 12));
                     ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), "Engine Architecture:");
@@ -523,7 +518,7 @@ namespace ui::menu {
 
                     ImGui::Dummy(ImVec2(0, 12));
                     if (ImGui::Button("SAFE EXIT APPLICATION", ImVec2(ImGui::GetContentRegionAvail().x, 38))) {
-                        safeExit();
+                        g_should_exit = true; // Signal exit cleanly outside ImGui frame
                     }
                 }
                 ImGui::EndChild();
@@ -534,7 +529,18 @@ namespace ui::menu {
         }
         ImGui::End();
 
-        ImGui::PopStyleVar(5);
+        ImGui::PopStyleVar(6);
         ImGui::PopStyleColor(16);
+
+        // ══════════════════════════════════════════════════════════════════════
+        // DEFERRED SAFE SHUTDOWN (CALLED AFTER ALL IMGUI FRAMES UNWOUND)
+        // ══════════════════════════════════════════════════════════════════════
+        if (g_should_exit) {
+            main_thread_flag = false;
+            Touch_Close();
+            data::thread_stop();
+            shutdown();
+            exit(0);
+        }
     }
 }
