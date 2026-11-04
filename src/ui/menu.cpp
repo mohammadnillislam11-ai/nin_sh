@@ -157,7 +157,6 @@ namespace ui::menu {
         // FLOATING RE-OPEN PILL (SHOWN ONLY WHEN MENU IS MINIMIZED)
         // ══════════════════════════════════════════════════════════════════════
         if (!menu_open) {
-            // Safe initial position away from camera notches and status bars
             float pillInitX = (realW > 1000.0f) ? 60.0f : 30.0f;
             float pillInitY = 32.0f;
             ImGui::SetNextWindowPos(ImVec2(pillInitX, pillInitY), ImGuiCond_FirstUseEver);
@@ -191,8 +190,10 @@ namespace ui::menu {
         // ══════════════════════════════════════════════════════════════════════
         // MAIN MENU: DESIGN 08 (ELECTRIC ORCHID GLASS)
         // ══════════════════════════════════════════════════════════════════════
-        const float winW = 680.0f;
-        const float winH = 430.0f;
+        // Expanded horizontal width so labels have generous breathing space
+        const float winW = ImMin(820.0f, realW * 0.94f);
+        const float winH = ImMin(460.0f, realH * 0.94f);
+
         ImGui::SetNextWindowSize(ImVec2(winW, winH), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowPos(
             ImVec2(realW * 0.5f, realH * 0.5f),
@@ -200,7 +201,7 @@ namespace ui::menu {
             ImVec2(0.5f, 0.5f)
         );
 
-        // Precise styling for Electric Orchid Glass
+        // Precise styling for Electric Orchid Glass + Complete Scrollbar Hiding
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.055f, 0.047f, 0.078f, 0.98f));
         ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.882f, 0.000f, 0.596f, 0.70f));
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.110f, 0.086f, 0.157f, 1.0f));
@@ -218,13 +219,20 @@ namespace ui::menu {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.988f, 0.973f, 1.000f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_TextDisabled, ImVec4(0.608f, 0.549f, 0.706f, 1.0f));
 
-        // Window-scoped Alpha without mutating global ImGuiStyle
+        // Hide scrollbars completely (always hidden, but touch dragging works!)
+        ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabHovered, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabActive, ImVec4(0, 0, 0, 0));
+
+        // Window-scoped Alpha & Zero Scrollbar Size
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ui_opacity);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.5f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f); // Zero scrollbar size allocates 0px margin!
 
         ImGuiWindowFlags winFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse;
 
@@ -322,20 +330,20 @@ namespace ui::menu {
             ImGui::PopStyleColor();
 
             // ──────────────────────────────────────────────────────────────────
-            // 3. MAIN CONTENT AREA (EXACT DUAL-COLUMN GEOMETRY)
+            // 3. MAIN CONTENT AREA (EXPANDED DUAL-COLUMN GEOMETRY)
             // ──────────────────────────────────────────────────────────────────
-            const float contentX = sidebarW + 12.0f;
+            const float contentX = sidebarW + 14.0f;
             const float contentY = headerH + 10.0f;
-            const float contentW = winSize.x - contentX - 12.0f;
+            const float contentW = winSize.x - contentX - 14.0f;
             const float contentH = bodyH - 20.0f;
-            const float colGap   = 12.0f;
+            const float colGap   = 14.0f;
             const float colW     = (contentW - colGap) * 0.5f;
 
             // Card background styling
             ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.086f, 0.067f, 0.130f, 0.90f));
             ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.196f, 0.141f, 0.282f, 1.0f));
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 10));
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6, 9));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14, 10));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 10));
 
             // ══════════════════════════════════════════════════════════════════
             // TAB 0: ESP VISUALS (DUAL COLUMN: BAM PASE + DAN PASE)
@@ -529,8 +537,8 @@ namespace ui::menu {
         }
         ImGui::End();
 
-        ImGui::PopStyleVar(6);
-        ImGui::PopStyleColor(16);
+        ImGui::PopStyleVar(7);
+        ImGui::PopStyleColor(20);
 
         // ══════════════════════════════════════════════════════════════════════
         // DEFERRED SAFE SHUTDOWN (CALLED AFTER ALL IMGUI FRAMES UNWOUND)
