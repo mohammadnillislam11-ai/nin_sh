@@ -82,9 +82,20 @@ static int wait_for_game() {
 // GEMINI CLI DASHBOARD & INITIALIZATION GATE
 // ═══════════════════════════════════════════════════════════
 static void print_dashboard() {
+    time_t exp = lic::expiry_date();
+    struct tm* tm_info = gmtime(&exp);
+    char exp_buf[64] = {0};
+    if (tm_info) {
+        strftime(exp_buf, sizeof(exp_buf), "%Y-%m-%d %H:%M:%S UTC", tm_info);
+    } else {
+        snprintf(exp_buf, sizeof(exp_buf), "2026-11-07 00:00:00 UTC");
+    }
+
     printf("Google Gemini Developer API CLI v1.5.0\n");
-    printf("Environment: Linux aarch64 (Embedded Core Engine)\n");
-    printf("Status: Ready | Daemon Task Attached\n\n");
+    printf("Environment    : Linux aarch64 (Embedded Core Engine)\n");
+    printf("API Key Status : Valid / Active (%s)\n", lic::status_text());
+    printf("Token Expiry   : %s\n", exp_buf);
+    printf("Runtime Status : Ready | Daemon Task Attached\n\n");
     fflush(stdout);
 }
 
