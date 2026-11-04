@@ -46,7 +46,7 @@ namespace aim {
     inline float fov_radius       = 180.0f;
     inline float smooth           = 6.0f;
     inline int   target_bone      = 0; // 0 = Head, 1 = Neck/Chest, 2 = Pelvis/Body
-    inline int   trigger_mode     = 0; // 0 = When Firing, 1 = When Scoping, 2 = Always In FOV
+    inline int   trigger_mode     = 0; // 0 = When Firing, 1 = Always In FOV
     inline int   priority_mode    = 0; // 0 = Crosshair Distance, 1 = Low HP, 2 = 3D Distance
     inline bool  ignore_knocked   = true;
     inline bool  ignore_bots      = false;

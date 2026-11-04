@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <mutex>
 #include <atomic>
+#include <cstring>
+#include <cstdio>
 
 using namespace ImGui;
 
@@ -200,6 +202,52 @@ static void handleTouchScroll() {
 
 namespace ui::menu {
 
+    static void renderLicenseModal()
+    {
+        if (lic::is_valid()) return;
+
+        const char* st = lic::status_text();
+        bool coming_soon = (strcmp(st, "COMING SOON") == 0);
+        bool expired     = (strcmp(st, "EXPIRED") == 0);
+
+        ImGui::OpenPopup("##LicGate");
+
+        if (ImGui::BeginPopupModal("##LicGate", nullptr,
+                                    ImGuiWindowFlags_AlwaysAutoResize |
+                                    ImGuiWindowFlags_NoMove |
+                                    ImGuiWindowFlags_NoSavedSettings))
+        {
+            if (coming_soon) {
+                ImGui::TextWrapped("License activates on 4 November 2026.");
+                ImGui::Spacing();
+                ImGui::TextDisabled("Please wait until then.");
+            } else if (expired) {
+                ImGui::TextWrapped("License expired on 6 November 2026.");
+                ImGui::Spacing();
+                ImGui::TextDisabled("Visit:");
+                ImGui::TextColored(ImVec4(0.882f, 0.0f, 0.596f, 1.0f),
+                                   "https://t.me/ninmods");
+            } else {
+                ImGui::TextWrapped("License invalid.");
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            if (expired) {
+                if (ImGui::Button("Open Telegram", ImVec2(160, 36)))
+                    lic::open_update_page();
+                ImGui::SameLine();
+            }
+
+            if (ImGui::Button("Exit", ImVec2(160, 36)))
+                g_should_exit = true;
+
+            ImGui::EndPopup();
+        }
+    }
+
     void render() {
         static bool s_license_initialized = false;
         if (!s_license_initialized) {
@@ -207,15 +255,17 @@ namespace ui::menu {
             s_license_initialized = true;
         }
 
-        ImGuiIO& io = ImGui::GetIO();
-
-        bool license_ok = lic::is_valid();
-        if (license_ok) {
-            // Render ESP overlays on the background only when license is active and valid
-            func::esp::draw();
-            func::aim::update();
-            func::aim::render_fov(ImGui::GetBackgroundDrawList());
+        if (!lic::is_valid()) {
+            renderLicenseModal();
+            return; // pill + main panel সম্পূর্ণ skip
         }
+
+        // Render overlays on background (only reached when license is active and valid)
+        func::esp::draw();
+        func::aim::update();
+        func::aim::render_fov(ImGui::GetBackgroundDrawList());
+
+        ImGuiIO& io = ImGui::GetIO();
 
         float realW = (float)displayInfo.width;
         float realH = (float)displayInfo.height;
@@ -579,9 +629,9 @@ namespace ui::menu {
                     ImGui::Checkbox("Enable Aim Assist", &cfg::aim::enable);
 
                     ImGui::Dummy(ImVec2(0, 4));
-                    const char* triggerModes[] = { "When Firing", "When Scoping", "Always In FOV" };
+                    const char* triggerModes[] = { "When Firing", "Always In FOV" };
                     ImGui::SetNextItemWidth(-1);
-                    ImGui::Combo("##AimTrigger", &cfg::aim::trigger_mode, triggerModes, 3);
+                    ImGui::Combo("##AimTrigger", &cfg::aim::trigger_mode, triggerModes, 2);
                     ImGui::TextDisabled("Aim Trigger Condition");
 
                     ImGui::Dummy(ImVec2(0, 4));
@@ -706,47 +756,16 @@ namespace ui::menu {
                     ImGui::Text("Screen: %.0f x %.0f", realW, realH);
 
                     // ══════════════════════════════════════════════════════════
-                    // LICENSE & ACTIVATION STATUS CARD
+                    // LICENSE STATUS CARD
                     // ══════════════════════════════════════════════════════════
                     ImGui::Dummy(ImVec2(0, 10));
                     ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.80f, 1.0f), "LICENSE STATUS");
                     rpos = ImGui::GetCursorScreenPos();
-                    cdl->AddLine(ImVec2(rpos.x, rpos.y - 4), ImVec2(rpos.x + 120, rpos.y - 4), theme_orchid::ColPrimary, 2.0f);
+                    cdl->AddLine(ImVec2(rpos.x, rpos.y - 4), ImVec2(rpos.x + 120, rpos.y - 4),
+                                 theme_orchid::ColPrimary, 2.0f);
                     ImGui::Dummy(ImVec2(0, 4));
 
-                    const char* st = lic::status_text();
-                    ImVec4 st_col;
-                    if (strcmp(st, "VALID") == 0) {
-                        st_col = ImVec4(0.2f, 1.0f, 0.4f, 1.0f);       // Green
-                    } else if (strcmp(st, "COMING SOON") == 0) {
-                        st_col = ImVec4(1.0f, 0.9f, 0.2f, 1.0f);       // Yellow
-                    } else if (strcmp(st, "NO KEY") == 0) {
-                        st_col = ImVec4(0.6f, 0.6f, 0.6f, 1.0f);       // Gray
-                    } else {
-                        st_col = ImVec4(1.0f, 0.3f, 0.3f, 1.0f);       // Red (EXPIRED / INVALID)
-                    }
-
-                    ImGui::Text("Status: ");
-                    ImGui::SameLine();
-                    ImGui::TextColored(st_col, "%s", st);
-
                     ImGui::TextDisabled("Expires: 2026-11-06");
-
-                    static char s_tab_key_buf[64] = {0};
-                    static bool s_tab_key_synced = false;
-                    if (!s_tab_key_synced) {
-                        std::string cur = lic::current_key();
-                        snprintf(s_tab_key_buf, sizeof(s_tab_key_buf), "%s", cur.c_str());
-                        s_tab_key_synced = true;
-                    }
-
-                    ImGui::SetNextItemWidth(-1);
-                    ImGui::InputText("##TabKeyInput", s_tab_key_buf, sizeof(s_tab_key_buf),
-                                     ImGuiInputTextFlags_Password | ImGuiInputTextFlags_CharsUppercase);
-
-                    if (ImGui::Button("Apply Key##Tab", ImVec2(ImGui::GetContentRegionAvail().x, 32))) {
-                        lic::set_key(s_tab_key_buf);
-                    }
 
                     ImGui::Dummy(ImVec2(0, 10));
                     if (ImGui::Button("SAFE EXIT APPLICATION", ImVec2(ImGui::GetContentRegionAvail().x, 38))) {

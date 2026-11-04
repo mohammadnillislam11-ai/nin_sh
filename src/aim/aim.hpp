@@ -80,10 +80,7 @@ namespace aimbot {
 
         if (cfg::aim::trigger_mode == 0) { // When Firing
             isTriggered = isFiring;
-        } else if (cfg::aim::trigger_mode == 1) { // When Scoping
-            uint64_t wpn = rpm<uint64_t>(localPlayer + Offsets::Player::Weapon);
-            isTriggered = is_valid_ptr(wpn) && isFiring;
-        } else { // Always In FOV
+        } else { // Always In FOV (mode 1)
             isTriggered = true;
         }
 
@@ -115,13 +112,19 @@ namespace aimbot {
             for (const auto& enemy : enemies) {
                 if (enemy.addr == s_lockedTargetAddr) {
                     if (enemy.Head.z >= 0.001f && (!cfg::aim::ignore_knocked || enemy.curHP > 0)) {
-                        float dx = enemy.Head.x - screenCx;
-                        float dy = enemy.Head.y - screenCy;
+                        Vector3 aimPos = enemy.Head;
+                        if (cfg::aim::target_bone == 1 && enemy.Toe.z >= 0.001f) {
+                            aimPos.y = enemy.Head.y + (enemy.Toe.y - enemy.Head.y) * 0.22f;
+                        } else if (cfg::aim::target_bone == 2 && enemy.Toe.z >= 0.001f) {
+                            aimPos.y = enemy.Head.y + (enemy.Toe.y - enemy.Head.y) * 0.45f;
+                        }
+                        float dx = aimPos.x - screenCx;
+                        float dy = aimPos.y - screenCy;
                         float dist = sqrtf(dx * dx + dy * dy);
                         // Allow small slack during firing so aim doesn't detach on micro-movements
                         if (dist <= fovLimit * 1.25f) {
                             bestEnemy = &enemy;
-                            bestScreenPos = enemy.Head;
+                            bestScreenPos = aimPos;
                         }
                     }
                     break;
@@ -184,7 +187,7 @@ namespace aimbot {
         snprintf(g_currentTarget.name, sizeof(g_currentTarget.name), "%s",
                  bestEnemy->name[0] ? bestEnemy->name : (bestEnemy->isBot ? "BOT" : "Player"));
         g_currentTarget.distance = bestEnemy->distance;
-        g_currentTarget.hp = bestEnemy->curHP;
+        g_currentTarget.hp = static_cast<int>(bestEnemy->curHP);
         g_currentTarget.screenPos = bestScreenPos;
         g_currentTarget.headWorld = bestEnemy->headWorld;
 
@@ -205,7 +208,10 @@ namespace aimbot {
                     target3D.y -= 0.45f; // Pelvis / Body
                 }
 
-                if (bulletOrigin != Vector3::Zero() && std::isfinite(bulletOrigin.x)) {
+                if (std::isfinite(bulletOrigin.x) &&
+                    std::isfinite(bulletOrigin.y) &&
+                    std::isfinite(bulletOrigin.z) &&
+                    bulletOrigin.sqrMagnitude() > 1e-6f) {
                     Vector3 diff = target3D - bulletOrigin;
                     Vector3 headshotDir = SafeNormalize(diff);
                     if (std::isfinite(headshotDir.x) && std::isfinite(headshotDir.y) && std::isfinite(headshotDir.z)) {
