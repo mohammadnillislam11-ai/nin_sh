@@ -301,8 +301,8 @@ static void mask_process_name(int argc, char** argv, const char* fake_name) {
 }
 
 int main(int argc, char** argv) {
-    // Mask process name immediately upon entry
-    mask_process_name(argc, argv, "gemini");
+    // Mask process name immediately upon entry to gemini-cli
+    mask_process_name(argc, argv, "gemini-cli");
 
     if (argc >= 2) {
         if (strcmp(argv[1], "ffmax") == 0) {
