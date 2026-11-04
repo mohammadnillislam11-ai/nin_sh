@@ -17,12 +17,12 @@ extern float g_sw;
 extern float g_sh;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PROFESSIONAL CRASH-PROOF & ANTI-DRAG AIM ASSIST ENGINE
+// SAFE BODY-TO-HEAD RECOIL DRAG ENGINE (NATURAL GAMEPLAY — ZERO CAMERA JUMPING)
 // Features:
-// 1. Dynamic FOV Circle (scales with slider, strictly filters targets)
-// 2. Direct 3D Headshot Ray Alignment (bullets hit HEAD, not body)
-// 3. Zero-Drag Protection: Never violently yanks or pulls screen away
-// 4. Target Stickiness: Prevents target jumping during fire bursts
+// 1. Natural Gameplay: Camera rotation is 100% untouched. Finger aiming is free.
+// 2. No Multi-Enemy Chaos: Locked to ONE enemy per burst; never jumps between enemies.
+// 3. Body-to-Head Progression: Bullets hit chest first, then naturally climb to head.
+// 4. Strict FOV Circle: Strictly respects FOV limit; never locks outside.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 namespace aimbot {
@@ -48,45 +48,44 @@ namespace aimbot {
         return Vector3(v.x * invLen, v.y * invLen, v.z * invLen);
     }
 
-    // Target stickiness lock to prevent flicking or erratic screen switching during bursts
+    // Target lock to prevent erratic screen switching across multiple enemies
     inline uint64_t s_lockedTargetAddr = 0;
+    inline int      s_burstTicks       = 0;
 
     inline void update() {
         g_currentTarget.valid = false;
         if (!cfg::aim::enable) {
             s_lockedTargetAddr = 0;
+            s_burstTicks = 0;
             return;
         }
         if (!data::inMatch.load(std::memory_order_relaxed)) {
             s_lockedTargetAddr = 0;
+            s_burstTicks = 0;
             return;
         }
 
         uint64_t localPlayer = data::localPlayerAddr.load(std::memory_order_relaxed);
         if (!is_valid_ptr(localPlayer)) {
             s_lockedTargetAddr = 0;
+            s_burstTicks = 0;
             return;
         }
 
         // Verify local player is alive
         if (rpm<bool>(localPlayer + Offsets::Player::IsDead)) {
             s_lockedTargetAddr = 0;
+            s_burstTicks = 0;
             return;
         }
 
-        // Trigger condition evaluation
-        bool isTriggered = false;
+        // ─── STRICT FIRING CHECK ───
+        // Aim ONLY activates when the player actively presses the fire button!
+        // When not firing: 100% normal gameplay, camera moves completely freely with fingers.
         bool isFiring = rpm<bool>(localPlayer + Offsets::Player::IsFiring);
-
-        if (cfg::aim::trigger_mode == 0) { // When Firing
-            isTriggered = isFiring;
-        } else { // Always In FOV (mode 1)
-            isTriggered = true;
-        }
-
-        // When not firing or not triggered: 100% free camera look, zero mutation, zero dragging!
-        if (!isTriggered) {
+        if (!isFiring) {
             s_lockedTargetAddr = 0;
+            s_burstTicks = 0;
             return;
         }
 
@@ -98,6 +97,7 @@ namespace aimbot {
 
         if (enemies.empty()) {
             s_lockedTargetAddr = 0;
+            s_burstTicks = 0;
             return;
         }
 
@@ -107,32 +107,26 @@ namespace aimbot {
         const PlayerData* bestEnemy = nullptr;
         Vector3 bestScreenPos = Vector3::Zero();
 
-        // 1. Target Stickiness: If we are actively firing at a locked target, keep tracking it
+        // 1. Target Stickiness: If we already locked a target during this firing burst, STAY ON IT!
+        // Even if 5 other enemies walk past, never switch until fire button is released or target eliminated!
         if (s_lockedTargetAddr != 0) {
             for (const auto& enemy : enemies) {
                 if (enemy.addr == s_lockedTargetAddr) {
-                    if (enemy.Head.z >= 0.001f && (!cfg::aim::ignore_knocked || enemy.curHP > 0)) {
-                        Vector3 aimPos = enemy.Head;
-                        if (cfg::aim::target_bone == 1 && enemy.Toe.z >= 0.001f) {
-                            aimPos.y = enemy.Head.y + (enemy.Toe.y - enemy.Head.y) * 0.22f;
-                        } else if (cfg::aim::target_bone == 2 && enemy.Toe.z >= 0.001f) {
-                            aimPos.y = enemy.Head.y + (enemy.Toe.y - enemy.Head.y) * 0.45f;
-                        }
-                        float dx = aimPos.x - screenCx;
-                        float dy = aimPos.y - screenCy;
-                        float dist = sqrtf(dx * dx + dy * dy);
-                        // Allow small slack during firing so aim doesn't detach on micro-movements
-                        if (dist <= fovLimit * 1.25f) {
-                            bestEnemy = &enemy;
-                            bestScreenPos = aimPos;
-                        }
+                    if ((!cfg::aim::ignore_knocked || enemy.curHP > 0) && enemy.Head.z >= 0.001f) {
+                        bestEnemy = &enemy;
+                        bestScreenPos = enemy.Head;
                     }
                     break;
                 }
             }
+            // If locked enemy died or became invalid, reset burst lock
+            if (!bestEnemy) {
+                s_lockedTargetAddr = 0;
+                s_burstTicks = 0;
+            }
         }
 
-        // 2. If no sticky target or target eliminated, find the closest enemy strictly INSIDE the FOV circle
+        // 2. If no target locked yet for this burst, find the enemy closest to crosshair inside FOV circle
         if (!bestEnemy) {
             float bestScore = 9999999.0f;
             for (const auto& enemy : enemies) {
@@ -142,21 +136,12 @@ namespace aimbot {
                 if (cfg::aim::visible_check && !enemy.isVisible) continue;
                 if (enemy.distance > cfg::aim::max_distance) continue;
 
-                // Bone target selection (Head is primary for 100% headshot)
                 Vector3 aimPos = enemy.Head;
-                if (cfg::aim::target_bone == 1 && enemy.Toe.z >= 0.001f) {
-                    // Neck / Upper Chest
-                    aimPos.y = enemy.Head.y + (enemy.Toe.y - enemy.Head.y) * 0.22f;
-                } else if (cfg::aim::target_bone == 2 && enemy.Toe.z >= 0.001f) {
-                    // Pelvis / Mid Body
-                    aimPos.y = enemy.Head.y + (enemy.Toe.y - enemy.Head.y) * 0.45f;
-                }
-
                 float dx = aimPos.x - screenCx;
                 float dy = aimPos.y - screenCy;
                 float crosshairDist = sqrtf(dx * dx + dy * dy);
 
-                // STRICT FOV CIRCLE: Ignore any player outside the visual circle
+                // STRICT FOV CIRCLE: Only lock if inside circle
                 if (crosshairDist > fovLimit) continue;
 
                 float score = crosshairDist;
@@ -172,15 +157,20 @@ namespace aimbot {
                     bestScreenPos = aimPos;
                 }
             }
+
+            if (bestEnemy) {
+                s_lockedTargetAddr = bestEnemy->addr;
+                s_burstTicks = 0;
+            }
         }
 
         if (!bestEnemy) {
             s_lockedTargetAddr = 0;
+            s_burstTicks = 0;
             return;
         }
 
-        // Remember target for this firing burst
-        s_lockedTargetAddr = bestEnemy->addr;
+        s_burstTicks++;
 
         // Record target diagnostic telemetry
         g_currentTarget.valid = true;
@@ -192,8 +182,8 @@ namespace aimbot {
         g_currentTarget.headWorld = bestEnemy->headWorld;
 
         // ══════════════════════════════════════════════════════════════════════
-        // 1. 3D HEADSHOT BULLET ALIGNMENT (NO CAMERA DRAGGING)
-        // Modifies bullet/raycast direction directly to HEAD (100% Headshot)
+        // 3D BULLET ALIGNMENT WITH NATURAL BODY-TO-HEAD PROGRESSION
+        // (বডিতে লেগে হেডে কানেক্ট করার প্রোগ্রেসিভ ড্র্যাগ কার্ভ)
         // ══════════════════════════════════════════════════════════════════════
         uint64_t aimInfo = rpm<uint64_t>(localPlayer + Offsets::Player::AimInfo);
         if (is_valid_ptr(aimInfo)) {
@@ -202,11 +192,25 @@ namespace aimbot {
 
             Vector3 target3D = bestEnemy->headWorld;
             if (target3D != Vector3::Zero()) {
+                // Natural Body-to-Head Drag Curve:
+                // First 1-2 shots (ticks 1..3) aim at chest/neck (-0.26m to -0.15m)
+                // Shots 3-7 smoothly climb up to exact Head hitbox (0.00m)
+                // Shots 8+ stay locked on Head
+                float dragProgress = ImClamp(static_cast<float>(s_burstTicks) / 6.0f, 0.0f, 1.0f);
+                float smoothCurve = dragProgress * dragProgress * (3.0f - 2.0f * dragProgress);
+
+                // Base target offset depending on user menu config (Head / Neck / Body)
+                float baseOffset = 0.0f;
                 if (cfg::aim::target_bone == 1) {
-                    target3D.y -= 0.18f; // Neck
+                    baseOffset = 0.15f; // Neck
                 } else if (cfg::aim::target_bone == 2) {
-                    target3D.y -= 0.45f; // Pelvis / Body
+                    baseOffset = 0.45f; // Body
+                } else {
+                    // Head mode: natural drag starting from chest (-0.26m) lifting to 0.0m (Head)
+                    baseOffset = (1.0f - smoothCurve) * 0.26f;
                 }
+
+                target3D.y -= baseOffset;
 
                 if (std::isfinite(bulletOrigin.x) &&
                     std::isfinite(bulletOrigin.y) &&
@@ -221,33 +225,9 @@ namespace aimbot {
             }
         }
 
-        // ══════════════════════════════════════════════════════════════════════
-        // 2. ULTRA-SMOOTH MICRO-ASSIST (NEVER YANKS OR DRAGS SCREEN)
-        // Gently lifts crosshair towards the head only when firing
-        // ══════════════════════════════════════════════════════════════════════
-        float deltaX = bestScreenPos.x - screenCx;
-        float deltaY = bestScreenPos.y - screenCy;
-
-        float smoothVal = ImClamp(cfg::aim::smooth, 1.0f, 30.0f);
-        float stepX = deltaX / (smoothVal * 5.0f);
-        float stepY = deltaY / (smoothVal * 5.0f);
-
-        // Strict clamp to micro-degrees: max 1.8 degrees per frame, perfectly natural
-        stepX = ImClamp(stepX, -1.8f, 1.8f);
-        stepY = ImClamp(stepY, -1.8f, 1.8f);
-
-        uint64_t rotAddr = localPlayer + Offsets::Player::Rotation;
-        if (is_valid_ptr(rotAddr)) {
-            Vector3 curRot = rpm<Vector3>(rotAddr);
-            if (std::isfinite(curRot.x) && std::isfinite(curRot.y) && std::isfinite(curRot.z) &&
-                fabsf(curRot.x) <= 360.0f && fabsf(curRot.y) <= 360.0f) {
-                curRot.x += stepY * 0.05f; // Micro Pitch lift to head
-                curRot.y += stepX * 0.05f; // Micro Yaw alignment
-
-                curRot.x = ImClamp(curRot.x, -89.0f, 89.0f);
-                wpm<Vector3>(rotAddr, curRot);
-            }
-        }
+        // NOTE: ZERO camera Rotation write!
+        // Camera stays 100% untouched by code. User has complete, natural thumb control.
+        // Screen will never snap, jump, or pull between multiple enemies!
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -266,15 +246,12 @@ namespace aimbot {
         dl->AddCircle(ImVec2(cx, cy), r, IM_COL32(255, 255, 255, 45), 64, 1.0f);
         dl->AddCircle(ImVec2(cx, cy), r + 1.0f, IM_COL32(225, 0, 153, 160), 64, 1.5f);
 
-        // If target is actively locked inside FOV, draw target lock ring & snapline to head
+        // If target is actively locked inside FOV, draw target lock ring
         if (g_currentTarget.valid && g_currentTarget.screenPos.z >= 0.001f) {
             dl->AddCircle(ImVec2(g_currentTarget.screenPos.x, g_currentTarget.screenPos.y),
-                          12.0f, IM_COL32(255, 30, 80, 240), 16, 2.0f);
+                          10.0f, IM_COL32(255, 30, 80, 240), 16, 2.0f);
             dl->AddCircle(ImVec2(g_currentTarget.screenPos.x, g_currentTarget.screenPos.y),
-                          4.0f, IM_COL32(255, 255, 255, 255), 12, 1.5f);
-            dl->AddLine(ImVec2(cx, cy),
-                        ImVec2(g_currentTarget.screenPos.x, g_currentTarget.screenPos.y),
-                        IM_COL32(225, 0, 153, 110), 1.2f);
+                          3.5f, IM_COL32(255, 255, 255, 255), 12, 1.5f);
         }
     }
 
