@@ -83,7 +83,8 @@ LOCAL_LDFLAGS := \
     -pie \
     -Wl,-z,relro \
     -Wl,-z,now \
-    -Wl,-z,noexecstack
+    -Wl,-z,noexecstack \
+    -Wl,-z,max-page-size=16384
 
 # ─── STATIC LIBS ───
 LOCAL_STATIC_LIBRARIES := \
