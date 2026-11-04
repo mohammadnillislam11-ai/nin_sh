@@ -1,5 +1,4 @@
 #include "menu.hpp"
-#include "license.hpp"
 #include "imgui.h"
 #include "Android_draw/draw.h"
 #include "Android_touch/Touch.hpp"
@@ -202,65 +201,8 @@ static void handleTouchScroll() {
 
 namespace ui::menu {
 
-    static void renderLicenseModal()
-    {
-        if (lic::is_valid()) return;
-
-        const char* st = lic::status_text();
-        bool coming_soon = (strcmp(st, "COMING SOON") == 0);
-        bool expired     = (strcmp(st, "EXPIRED") == 0);
-
-        ImGui::OpenPopup("##LicGate");
-
-        if (ImGui::BeginPopupModal("##LicGate", nullptr,
-                                    ImGuiWindowFlags_AlwaysAutoResize |
-                                    ImGuiWindowFlags_NoMove |
-                                    ImGuiWindowFlags_NoSavedSettings))
-        {
-            if (coming_soon) {
-                ImGui::TextWrapped("License activates on 4 November 2026.");
-                ImGui::Spacing();
-                ImGui::TextDisabled("Please wait until then.");
-            } else if (expired) {
-                ImGui::TextWrapped("License expired on 6 November 2026.");
-                ImGui::Spacing();
-                ImGui::TextDisabled("Visit:");
-                ImGui::TextColored(ImVec4(0.882f, 0.0f, 0.596f, 1.0f),
-                                   "https://t.me/ninmods");
-            } else {
-                ImGui::TextWrapped("License invalid.");
-            }
-
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            if (expired) {
-                if (ImGui::Button("Open Telegram", ImVec2(160, 36)))
-                    lic::open_update_page();
-                ImGui::SameLine();
-            }
-
-            if (ImGui::Button("Exit", ImVec2(160, 36)))
-                g_should_exit = true;
-
-            ImGui::EndPopup();
-        }
-    }
-
     void render() {
-        static bool s_license_initialized = false;
-        if (!s_license_initialized) {
-            lic::init();
-            s_license_initialized = true;
-        }
-
-        if (!lic::is_valid()) {
-            renderLicenseModal();
-            return; // pill + main panel সম্পূর্ণ skip
-        }
-
-        // Render overlays on background (only reached when license is active and valid)
+        // Render overlays on background
         func::esp::draw();
         func::aim::update();
         func::aim::render_fov(ImGui::GetBackgroundDrawList());
@@ -754,18 +696,6 @@ namespace ui::menu {
 
                     ImGui::Text("Overlay FPS: %.1f", io.Framerate);
                     ImGui::Text("Screen: %.0f x %.0f", realW, realH);
-
-                    // ══════════════════════════════════════════════════════════
-                    // LICENSE STATUS CARD
-                    // ══════════════════════════════════════════════════════════
-                    ImGui::Dummy(ImVec2(0, 10));
-                    ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.80f, 1.0f), "LICENSE STATUS");
-                    rpos = ImGui::GetCursorScreenPos();
-                    cdl->AddLine(ImVec2(rpos.x, rpos.y - 4), ImVec2(rpos.x + 120, rpos.y - 4),
-                                 theme_orchid::ColPrimary, 2.0f);
-                    ImGui::Dummy(ImVec2(0, 4));
-
-                    ImGui::TextDisabled("Expires: 2026-11-06");
 
                     ImGui::Dummy(ImVec2(0, 10));
                     if (ImGui::Button("SAFE EXIT APPLICATION", ImVec2(ImGui::GetContentRegionAvail().x, 38))) {

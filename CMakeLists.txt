@@ -31,7 +31,7 @@ include_directories(
 
 file(GLOB_RECURSE SRC_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/license.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/protect/license.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/includes/draw/*.cpp
 )
 
