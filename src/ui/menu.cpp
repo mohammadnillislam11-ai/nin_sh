@@ -4,6 +4,7 @@
 #include "Android_draw/draw.h"
 #include "Android_touch/Touch.hpp"
 #include "func/esp.hpp"
+#include "func/aim.hpp"
 #include "cfg.hpp"
 #include "game/data.hpp"
 #include "encrypt.h"
@@ -212,6 +213,8 @@ namespace ui::menu {
         if (license_ok) {
             // Render ESP overlays on the background only when license is active and valid
             func::esp::draw();
+            func::aim::update();
+            func::aim::render_fov(ImGui::GetBackgroundDrawList());
         }
 
         float realW = (float)displayInfo.width;
@@ -561,76 +564,94 @@ namespace ui::menu {
                 ImGui::EndChild();
             }
             // ══════════════════════════════════════════════════════════════════
-            // TAB 1: COMBAT & TARGET FILTERS (DUAL COLUMN)
+            // TAB 1: COMBAT & AIM ASSIST (DUAL COLUMN)
             // ══════════════════════════════════════════════════════════════════
             else if (activeTab == 1) {
-                // Left Column: Targeting options (Bound to cfg::combat::*)
+                // Left Column: Aim Controls & Target Selectors
                 ImGui::SetCursorPos(ImVec2(contentX, contentY));
                 if (ImGui::BeginChild("##ColLeftCombat", ImVec2(colW, contentH), true)) {
-                    ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.80f, 1.0f), "TARGET PRIORITY");
+                    ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.80f, 1.0f), "AIMBOT SETTINGS");
                     ImDrawList* cdl = ImGui::GetWindowDrawList();
                     ImVec2 lpos = ImGui::GetCursorScreenPos();
-                    cdl->AddLine(ImVec2(lpos.x, lpos.y - 4), ImVec2(lpos.x + 110, lpos.y - 4), theme_orchid::ColPrimary, 2.0f);
+                    cdl->AddLine(ImVec2(lpos.x, lpos.y - 4), ImVec2(lpos.x + 120, lpos.y - 4), theme_orchid::ColPrimary, 2.0f);
                     ImGui::Dummy(ImVec2(0, 4));
 
-                    ImGui::Checkbox("Auto Target Closest", &cfg::combat::auto_target_closest);
-                    ImGui::Checkbox("Prioritize Low HP", &cfg::combat::prioritize_low_hp);
-                    ImGui::Checkbox("Filter Invisible Enemies", &cfg::combat::filter_invisible);
+                    ImGui::Checkbox("Enable Aim Assist", &cfg::aim::enable);
 
-                    ImGui::Dummy(ImVec2(0, 10));
-                    ImGui::TextDisabled("Tactical Notice:");
-                    ImGui::TextWrapped("Direct touch injection is completely removed for maximum stability.");
+                    ImGui::Dummy(ImVec2(0, 4));
+                    const char* triggerModes[] = { "When Firing", "When Scoping", "Always In FOV" };
+                    ImGui::SetNextItemWidth(-1);
+                    ImGui::Combo("##AimTrigger", &cfg::aim::trigger_mode, triggerModes, 3);
+                    ImGui::TextDisabled("Aim Trigger Condition");
+
+                    ImGui::Dummy(ImVec2(0, 4));
+                    const char* boneTargets[] = { "Head (100% Headshot)", "Neck / Upper Chest", "Pelvis / Body" };
+                    ImGui::SetNextItemWidth(-1);
+                    ImGui::Combo("##AimBone", &cfg::aim::target_bone, boneTargets, 3);
+                    ImGui::TextDisabled("Target Aim Bone");
+
+                    ImGui::Dummy(ImVec2(0, 4));
+                    const char* priorityModes[] = { "Crosshair Distance", "Lowest Health", "3D Distance" };
+                    ImGui::SetNextItemWidth(-1);
+                    ImGui::Combo("##AimPriority", &cfg::aim::priority_mode, priorityModes, 3);
+                    ImGui::TextDisabled("Target Selection Priority");
+
+                    ImGui::Dummy(ImVec2(0, 8));
+                    ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.80f, 1.0f), "SAFETY FILTERS");
+                    lpos = ImGui::GetCursorScreenPos();
+                    cdl->AddLine(ImVec2(lpos.x, lpos.y - 4), ImVec2(lpos.x + 100, lpos.y - 4), theme_orchid::ColPrimary, 2.0f);
+                    ImGui::Dummy(ImVec2(0, 4));
+
+                    ImGui::Checkbox("Ignore Knocked Enemies", &cfg::aim::ignore_knocked);
+                    ImGui::Checkbox("Ignore AI Bot Players", &cfg::aim::ignore_bots);
+                    ImGui::Checkbox("Check Visibility Only", &cfg::aim::visible_check);
 
                     handleTouchScroll();
                 }
                 ImGui::EndChild();
 
-                // Right Column: Target info & live diagnostics
+                // Right Column: FOV & Smooth Speed & Live Lock HUD
                 ImGui::SetCursorPos(ImVec2(contentX + colW + colGap, contentY));
                 if (ImGui::BeginChild("##ColRightCombat", ImVec2(colW, contentH), true)) {
-                    ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.80f, 1.0f), "FOV & RANGES");
+                    ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.80f, 1.0f), "FOV & SMOOTHNESS");
                     ImDrawList* cdl = ImGui::GetWindowDrawList();
                     ImVec2 rpos = ImGui::GetCursorScreenPos();
-                    cdl->AddLine(ImVec2(rpos.x, rpos.y - 4), ImVec2(rpos.x + 95, rpos.y - 4), theme_orchid::ColPrimary, 2.0f);
+                    cdl->AddLine(ImVec2(rpos.x, rpos.y - 4), ImVec2(rpos.x + 125, rpos.y - 4), theme_orchid::ColPrimary, 2.0f);
                     ImGui::Dummy(ImVec2(0, 4));
 
+                    ImGui::Checkbox("Draw FOV Circle", &cfg::aim::show_fov);
+
+                    ImGui::Dummy(ImVec2(0, 4));
                     ImGui::SetNextItemWidth(-1);
-                    ImGui::SliderFloat("##LootRange", &cfg::esp::loot_range, 30.0f, 300.0f, "%.0f m");
-                    ImGui::TextDisabled("Loot Scan Radius");
+                    ImGui::SliderFloat("##FovRadius", &cfg::aim::fov_radius, 40.0f, 450.0f, "%.0f px");
+                    ImGui::TextDisabled("Aim FOV Circle Radius");
+
+                    ImGui::Dummy(ImVec2(0, 4));
+                    ImGui::SetNextItemWidth(-1);
+                    ImGui::SliderFloat("##AimSmooth", &cfg::aim::smooth, 1.0f, 25.0f, "%.1f (Smooth)");
+                    ImGui::TextDisabled("Smooth Factor (Higher = Safe & Human)");
+
+                    ImGui::Dummy(ImVec2(0, 4));
+                    ImGui::SetNextItemWidth(-1);
+                    ImGui::SliderFloat("##AimMaxDist", &cfg::aim::max_distance, 20.0f, 300.0f, "%.0f m");
+                    ImGui::TextDisabled("Max Aiming Range");
 
                     ImGui::Dummy(ImVec2(0, 10));
+                    ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.80f, 1.0f), "LIVE TARGET HUD");
+                    rpos = ImGui::GetCursorScreenPos();
+                    cdl->AddLine(ImVec2(rpos.x, rpos.y - 4), ImVec2(rpos.x + 105, rpos.y - 4), theme_orchid::ColPrimary, 2.0f);
+                    ImGui::Dummy(ImVec2(0, 4));
 
-                    // Live target finder from data::players with dead player filter
-                    std::string targetName = "None";
-                    float targetDist = 0.0f;
-                    int targetHP = 0;
-                    bool targetFound = false;
-
-                    {
-                        std::lock_guard<std::mutex> lk(data::players_mutex);
-                        float minDist = 999999.0f;
-                        for (const auto& p : data::players) {
-                            if (p.Head.z < 0.001f || p.Toe.z < 0.001f) continue;
-                            if (p.isBot && cfg::esp::ignore_bots) continue;
-                            if (p.curHP <= 0) continue; // Skip dead players
-                            if (p.distance < minDist) {
-                                minDist = p.distance;
-                                targetName = (p.name[0] != '\0') ? std::string(p.name) : (p.isBot ? "BOT" : "Player");
-                                targetDist = p.distance;
-                                targetHP = static_cast<int>(p.curHP);
-                                targetFound = true;
-                            }
-                        }
-                    }
-
-                    if (targetFound) {
-                        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "Active Target: %s", targetName.c_str());
-                        ImGui::Text("Target Distance: %.1f m", targetDist);
-                        ImGui::Text("Target Health: %d HP", static_cast<int>(targetHP));
+                    if (func::aim::g_currentTarget.valid) {
+                        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "Target: %s", func::aim::g_currentTarget.name);
+                        ImGui::Text("Distance: %.1f m", func::aim::g_currentTarget.distance);
+                        ImGui::Text("Health: %d HP", func::aim::g_currentTarget.hp);
+                        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.6f, 1.0f), "Status: LOCKED [IN FOV]");
                     } else {
-                        ImGui::TextDisabled("Active Target: None (Scanning)");
-                        ImGui::TextDisabled("Target Distance: -- m");
-                        ImGui::TextDisabled("Target Health: --");
+                        ImGui::TextDisabled("Target: None (Scanning)");
+                        ImGui::TextDisabled("Distance: -- m");
+                        ImGui::TextDisabled("Health: --");
+                        ImGui::TextDisabled("Status: STANDBY");
                     }
 
                     handleTouchScroll();

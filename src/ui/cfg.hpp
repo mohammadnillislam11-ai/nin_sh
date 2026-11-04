@@ -39,4 +39,19 @@ namespace combat {
     inline bool prioritize_low_hp   = false;
     inline bool filter_invisible    = true;
 }
+
+namespace aim {
+    inline bool  enable           = true;
+    inline bool  show_fov         = true;
+    inline float fov_radius       = 180.0f;
+    inline float smooth           = 6.0f;
+    inline int   target_bone      = 0; // 0 = Head, 1 = Neck/Chest, 2 = Pelvis/Body
+    inline int   trigger_mode     = 0; // 0 = When Firing, 1 = When Scoping, 2 = Always In FOV
+    inline int   priority_mode    = 0; // 0 = Crosshair Distance, 1 = Low HP, 2 = 3D Distance
+    inline bool  ignore_knocked   = true;
+    inline bool  ignore_bots      = false;
+    inline bool  visible_check    = true;
+    inline float max_distance     = 200.0f;
+    inline bool  prediction       = true;
+}
 }
