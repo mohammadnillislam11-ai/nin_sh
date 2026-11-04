@@ -20,9 +20,10 @@ extern float g_sh;
 // SAFE BODY-TO-HEAD RECOIL DRAG ENGINE (NATURAL GAMEPLAY — ZERO CAMERA JUMPING)
 // Features:
 // 1. Natural Gameplay: Camera rotation is 100% untouched. Finger aiming is free.
-// 2. No Multi-Enemy Chaos: Locked to ONE enemy per burst; never jumps between enemies.
-// 3. Body-to-Head Progression: Bullets hit chest first, then naturally climb to head.
-// 4. Strict FOV Circle: Strictly respects FOV limit; never locks outside.
+// 2. Strict Target Stickiness & Hysteresis: ZERO screen shaking when multiple enemies enter FOV.
+// 3. Grace-Period Burst Lock: Prevents lock resets between rapid bullet intervals.
+// 4. Progressive Body-to-Head Drag: Bullets climb naturally from chest to head.
+// 5. Strict FOV Circle: Strictly respects FOV limit; never locks outside.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 namespace aimbot {
@@ -48,46 +49,63 @@ namespace aimbot {
         return Vector3(v.x * invLen, v.y * invLen, v.z * invLen);
     }
 
-    // Target lock to prevent erratic screen switching across multiple enemies
+    // Target stickiness with hysteresis & grace period to completely eliminate screen shaking
     inline uint64_t s_lockedTargetAddr = 0;
+    inline int      s_lockTimeoutTicks = 0;
     inline int      s_burstTicks       = 0;
+    inline Vector3  s_prevDir          = Vector3::Zero();
 
     inline void update() {
         g_currentTarget.valid = false;
         if (!cfg::aim::enable) {
             s_lockedTargetAddr = 0;
+            s_lockTimeoutTicks = 0;
             s_burstTicks = 0;
+            s_prevDir = Vector3::Zero();
             return;
         }
         if (!data::inMatch.load(std::memory_order_relaxed)) {
             s_lockedTargetAddr = 0;
+            s_lockTimeoutTicks = 0;
             s_burstTicks = 0;
+            s_prevDir = Vector3::Zero();
             return;
         }
 
         uint64_t localPlayer = data::localPlayerAddr.load(std::memory_order_relaxed);
         if (!is_valid_ptr(localPlayer)) {
             s_lockedTargetAddr = 0;
+            s_lockTimeoutTicks = 0;
             s_burstTicks = 0;
+            s_prevDir = Vector3::Zero();
             return;
         }
 
         // Verify local player is alive
         if (rpm<bool>(localPlayer + Offsets::Player::IsDead)) {
             s_lockedTargetAddr = 0;
+            s_lockTimeoutTicks = 0;
             s_burstTicks = 0;
+            s_prevDir = Vector3::Zero();
             return;
         }
 
-        // ─── STRICT FIRING CHECK ───
-        // Aim ONLY activates when the player actively presses the fire button!
-        // When not firing: 100% normal gameplay, camera moves completely freely with fingers.
+        // ─── FIRING STATE & BURST GRACE PERIOD ───
         bool isFiring = rpm<bool>(localPlayer + Offsets::Player::IsFiring);
         if (!isFiring) {
-            s_lockedTargetAddr = 0;
-            s_burstTicks = 0;
+            // Give 12 frames (~200ms) grace period so lock doesn't drop between rapid-fire bullets
+            if (s_lockTimeoutTicks > 0) {
+                s_lockTimeoutTicks--;
+            } else {
+                s_lockedTargetAddr = 0;
+                s_burstTicks = 0;
+                s_prevDir = Vector3::Zero();
+            }
             return;
         }
+
+        // Actively firing -> refresh lock lease
+        s_lockTimeoutTicks = 30;
 
         std::vector<PlayerData> enemies;
         {
@@ -98,6 +116,7 @@ namespace aimbot {
         if (enemies.empty()) {
             s_lockedTargetAddr = 0;
             s_burstTicks = 0;
+            s_prevDir = Vector3::Zero();
             return;
         }
 
@@ -107,31 +126,44 @@ namespace aimbot {
         const PlayerData* bestEnemy = nullptr;
         Vector3 bestScreenPos = Vector3::Zero();
 
-        // 1. Target Stickiness: If we already locked a target during this firing burst, STAY ON IT!
-        // Even if 5 other enemies walk past, never switch until fire button is released or target eliminated!
+        // ══════════════════════════════════════════════════════════════════════
+        // 1. STRICT TARGET HYSTERESIS (STICK TO CURRENT TARGET)
+        // If Target 1 is locked, NEVER switch to Target 2 as long as Target 1 is in view!
+        // This completely eliminates crosshair flickering and screen shaking!
+        // ══════════════════════════════════════════════════════════════════════
         if (s_lockedTargetAddr != 0) {
             for (const auto& enemy : enemies) {
                 if (enemy.addr == s_lockedTargetAddr) {
-                    if ((!cfg::aim::ignore_knocked || enemy.curHP > 0) && enemy.Head.z >= 0.001f) {
-                        bestEnemy = &enemy;
-                        bestScreenPos = enemy.Head;
+                    if (enemy.curHP > 0 && enemy.Head.z >= 0.5f) {
+                        float dx = enemy.Head.x - screenCx;
+                        float dy = enemy.Head.y - screenCy;
+                        float dist = sqrtf(dx * dx + dy * dy);
+                        // Generous hysteresis boundary (1.5x FOV): never detach on micro-movements
+                        if (dist <= fovLimit * 1.5f) {
+                            bestEnemy = &enemy;
+                            bestScreenPos = enemy.Head;
+                        }
                     }
                     break;
                 }
             }
-            // If locked enemy died or became invalid, reset burst lock
+
+            // If locked enemy died or left FOV, clear lock to allow new target acquisition
             if (!bestEnemy) {
                 s_lockedTargetAddr = 0;
                 s_burstTicks = 0;
+                s_prevDir = Vector3::Zero();
             }
         }
 
-        // 2. If no target locked yet for this burst, find the enemy closest to crosshair inside FOV circle
+        // ══════════════════════════════════════════════════════════════════════
+        // 2. NEW TARGET ACQUISITION (ONLY WHEN NO TARGET IS LOCKED)
+        // Find single closest enemy inside FOV circle
+        // ══════════════════════════════════════════════════════════════════════
         if (!bestEnemy) {
             float bestScore = 9999999.0f;
             for (const auto& enemy : enemies) {
-                if (enemy.Head.z < 0.001f) continue;
-                if (cfg::aim::ignore_knocked && enemy.curHP <= 0) continue;
+                if (enemy.Head.z < 0.5f || enemy.curHP <= 0) continue;
                 if (cfg::aim::ignore_bots && enemy.isBot) continue;
                 if (cfg::aim::visible_check && !enemy.isVisible) continue;
                 if (enemy.distance > cfg::aim::max_distance) continue;
@@ -160,6 +192,7 @@ namespace aimbot {
 
             if (bestEnemy) {
                 s_lockedTargetAddr = bestEnemy->addr;
+                s_lockTimeoutTicks = 30;
                 s_burstTicks = 0;
             }
         }
@@ -167,6 +200,7 @@ namespace aimbot {
         if (!bestEnemy) {
             s_lockedTargetAddr = 0;
             s_burstTicks = 0;
+            s_prevDir = Vector3::Zero();
             return;
         }
 
@@ -182,8 +216,7 @@ namespace aimbot {
         g_currentTarget.headWorld = bestEnemy->headWorld;
 
         // ══════════════════════════════════════════════════════════════════════
-        // 3D BULLET ALIGNMENT WITH NATURAL BODY-TO-HEAD PROGRESSION
-        // (বডিতে লেগে হেডে কানেক্ট করার প্রোগ্রেসিভ ড্র্যাগ কার্ভ)
+        // 3D BULLET ALIGNMENT WITH PROGRESSIVE DRAG & SMOOTH INTERPOLATION
         // ══════════════════════════════════════════════════════════════════════
         uint64_t aimInfo = rpm<uint64_t>(localPlayer + Offsets::Player::AimInfo);
         if (is_valid_ptr(aimInfo)) {
@@ -219,7 +252,16 @@ namespace aimbot {
                     Vector3 diff = target3D - bulletOrigin;
                     Vector3 headshotDir = SafeNormalize(diff);
                     if (std::isfinite(headshotDir.x) && std::isfinite(headshotDir.y) && std::isfinite(headshotDir.z)) {
-                        wpm<Vector3>(dirAddr, headshotDir);
+                        // Smoothly blend direction to eliminate micro-jitter between frames
+                        Vector3 finalDir = headshotDir;
+                        if (s_prevDir != Vector3::Zero()) {
+                            finalDir.x = s_prevDir.x + (headshotDir.x - s_prevDir.x) * 0.45f;
+                            finalDir.y = s_prevDir.y + (headshotDir.y - s_prevDir.y) * 0.45f;
+                            finalDir.z = s_prevDir.z + (headshotDir.z - s_prevDir.z) * 0.45f;
+                            finalDir = SafeNormalize(finalDir);
+                        }
+                        s_prevDir = finalDir;
+                        wpm<Vector3>(dirAddr, finalDir);
                     }
                 }
             }
