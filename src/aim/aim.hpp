@@ -90,10 +90,22 @@ namespace aimbot {
             return;
         }
 
-        // ─── FIRING STATE & BURST GRACE PERIOD ───
+        // ─── FIRING & SCOPING STATE ───
         bool isFiring = rpm<bool>(localPlayer + Offsets::Player::IsFiring);
-        if (!isFiring) {
-            // Give 12 frames (~200ms) grace period so lock doesn't drop between rapid-fire bullets
+        float fovOffset = rpm<float>(localPlayer + Offsets::Player::FOVOffset);
+        bool isScoping = (fovOffset < -0.01f || fovOffset > 0.01f);
+
+        bool triggerActive = false;
+        if (cfg::aim::trigger_mode == 1) {
+            triggerActive = true; // Always In FOV
+        } else if (cfg::aim::scope_aim && isScoping) {
+            triggerActive = true; // Instant activation when scoping with sniper/long guns
+        } else {
+            triggerActive = isFiring;
+        }
+
+        if (!triggerActive) {
+            // Give grace period so lock doesn't drop between rapid-fire bullets
             if (s_lockTimeoutTicks > 0) {
                 s_lockTimeoutTicks--;
             } else {
@@ -104,7 +116,7 @@ namespace aimbot {
             return;
         }
 
-        // Actively firing -> refresh lock lease
+        // Active trigger -> refresh lock lease
         s_lockTimeoutTicks = 30;
 
         std::vector<PlayerData> enemies;
@@ -234,7 +246,10 @@ namespace aimbot {
 
                 // Base target offset depending on user menu config (Head / Neck / Body)
                 float baseOffset = 0.0f;
-                if (cfg::aim::target_bone == 1) {
+                if (cfg::aim::scope_aim && isScoping) {
+                    // Scoping mode: 100% direct head lock with zero body offset
+                    baseOffset = 0.0f;
+                } else if (cfg::aim::target_bone == 1) {
                     baseOffset = 0.15f; // Neck
                 } else if (cfg::aim::target_bone == 2) {
                     baseOffset = 0.45f; // Body

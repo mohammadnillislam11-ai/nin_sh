@@ -572,6 +572,7 @@ namespace ui::menu {
                     ImGui::Dummy(ImVec2(0, 4));
 
                     ImGui::Checkbox("Enable Aim Assist", &cfg::aim::enable);
+                    ImGui::Checkbox("Scope Headshot (Instant Head)", &cfg::aim::scope_aim);
 
                     ImGui::Dummy(ImVec2(0, 4));
                     const char* triggerModes[] = { "When Firing", "Always In FOV" };
