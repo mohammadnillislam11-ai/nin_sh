@@ -123,21 +123,22 @@ static bool DrawSidebarIconButton(const char* str_id, EIconType icon_type, bool 
     ImVec2 center = ImVec2((bMin.x + bMax.x) * 0.5f, (bMin.y + bMax.y) * 0.5f);
 
     if (is_active) {
-        // Active button background & subtle border
-        dl->AddRectFilled(bMin, bMax, IM_COL32(225, 0, 152, 45), 8.0f);
-        dl->AddRect(bMin, bMax, IM_COL32(225, 0, 152, 130), 8.0f, 0, 1.0f);
+        // Active button background & subtle glowing border
+        dl->AddRectFilled(bMin, bMax, IM_COL32(225, 0, 152, 48), 10.0f);
+        dl->AddRect(bMin, bMax, IM_COL32(225, 0, 152, 140), 10.0f, 0, 1.2f);
 
         // Left vertical indicator pill (crisp 3.5px width)
-        dl->AddRectFilled(ImVec2(bMin.x + 2.0f, bMin.y + 7.0f), ImVec2(bMin.x + 5.5f, bMax.y - 7.0f), theme_orchid::ColPrimary, 2.0f);
+        dl->AddRectFilled(ImVec2(bMin.x + 3.0f, bMin.y + 8.0f), ImVec2(bMin.x + 6.5f, bMax.y - 8.0f), theme_orchid::ColPrimary, 2.0f);
 
-        // Glowing white icon
-        DrawVectorIcon(dl, icon_type, center, 20.0f, theme_orchid::ColWhite);
+        // Glowing white icon (larger 25px scale for crisp visibility)
+        DrawVectorIcon(dl, icon_type, center, 25.0f, theme_orchid::ColWhite);
     } else {
         if (hovered) {
-            dl->AddRectFilled(bMin, bMax, IM_COL32(255, 255, 255, 15), 8.0f);
+            dl->AddRectFilled(bMin, bMax, IM_COL32(255, 255, 255, 18), 10.0f);
         }
         ImU32 ic_col = hovered ? theme_orchid::ColPrimaryLight : theme_orchid::ColTextMuted;
-        DrawVectorIcon(dl, icon_type, center, 18.0f, ic_col);
+        // Idle icon (larger 23px scale)
+        DrawVectorIcon(dl, icon_type, center, 23.0f, ic_col);
     }
 
     return pressed;
@@ -434,38 +435,40 @@ namespace ui::menu {
             // ──────────────────────────────────────────────────────────────────
             const float bodyY = headerH;
             const float bodyH = winSize.y - headerH;
-            const float sidebarW = 60.0f;
+            const float sidebarW = 76.0f;
 
             // SIDEBAR CONTAINER
             ImGui::SetCursorPos(ImVec2(0, bodyY));
             ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.067f, 0.055f, 0.094f, 1.0f));
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5, 10));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 
             if (ImGui::BeginChild("##Sidebar", ImVec2(sidebarW, bodyH), false, ImGuiWindowFlags_NoScrollbar)) {
                 // Divider line between sidebar & content
                 dl->AddLine(ImVec2(winPos.x + sidebarW, winPos.y + headerH), ImVec2(winPos.x + sidebarW, winPos.y + winSize.y), IM_COL32(40, 30, 56, 255), 1.0f);
 
-                ImVec2 btnSize = ImVec2(sidebarW - 10.0f, 46.0f);
+                const ImVec2 btnSize = ImVec2(56.0f, 52.0f);
+                const float btnX = (sidebarW - btnSize.x) * 0.5f; // Exactly 10.0f -> centered between 0 and 76
 
                 // Tab 0: ESP (Eye Icon)
+                ImGui::SetCursorPos(ImVec2(btnX, 12.0f));
                 if (DrawSidebarIconButton("##TabESP", ICON_EYE, (activeTab == 0), btnSize)) {
                     activeTab = 0;
                 }
-                ImGui::Dummy(ImVec2(0, 4));
 
                 // Tab 1: Combat / Aim (Crosshair Icon)
+                ImGui::SetCursorPos(ImVec2(btnX, 12.0f + btnSize.y + 8.0f));
                 if (DrawSidebarIconButton("##TabCombat", ICON_CROSSHAIR, (activeTab == 1), btnSize)) {
                     activeTab = 1;
                 }
-                ImGui::Dummy(ImVec2(0, 4));
 
                 // Tab 2: Settings (Gear Icon)
+                ImGui::SetCursorPos(ImVec2(btnX, 12.0f + (btnSize.y + 8.0f) * 2.0f));
                 if (DrawSidebarIconButton("##TabSettings", ICON_SETTINGS, (activeTab == 2), btnSize)) {
                     activeTab = 2;
                 }
 
-                // Bottom Safe Exit Icon (Anchored precisely to bottom edge)
-                ImGui::SetCursorPos(ImVec2(5.0f, bodyH - 52.0f));
+                // Bottom Safe Exit Icon (Anchored cleanly to bottom with equal margin)
+                ImGui::SetCursorPos(ImVec2(btnX, bodyH - btnSize.y - 12.0f));
                 if (DrawSidebarIconButton("##TabPower", ICON_POWER, false, btnSize)) {
                     g_should_exit = true; // Signal exit cleanly outside ImGui frame
                 }
