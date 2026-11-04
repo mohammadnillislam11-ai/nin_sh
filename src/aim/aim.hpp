@@ -239,13 +239,15 @@ namespace aimbot {
                 } else if (cfg::aim::target_bone == 2) {
                     baseOffset = 0.45f; // Body
                 } else {
-                    // Head mode: natural drag starting from chest (-0.26m) lifting towards Head (0.0m)
-                    // Scaled dynamically by cfg::aim::headshot_rate:
-                    // At 100% rate: fully climbs to 0.0m (Head)
-                    // At 50% rate: climbs halfway to upper chest/neck (-0.18m)
-                    // At 0% rate: stays centered on torso (-0.36m, pure body shots)
+                    // Instant Extensible Drag:
+                    // Rapid snap to head hitbox within the very first frames of dragging.
+                    // Smooth curve reaches full 100% head snap at s_burstTicks >= 2.
+                    float dragProgress = ImClamp(static_cast<float>(s_burstTicks) / 2.0f, 0.0f, 1.0f);
+                    float smoothCurve = dragProgress * dragProgress * (3.0f - 2.0f * dragProgress);
+
                     float targetHeightOffset = (1.0f - (cfg::aim::headshot_rate * 0.01f)) * 0.36f;
-                    baseOffset = targetHeightOffset + ((1.0f - smoothCurve) * 0.26f);
+                    // Directly locks to head elevation (0.0m) as soon as dragging commences
+                    baseOffset = targetHeightOffset + ((1.0f - smoothCurve) * 0.08f);
                 }
 
                 target3D.y -= baseOffset;
@@ -257,12 +259,12 @@ namespace aimbot {
                     Vector3 diff = target3D - bulletOrigin;
                     Vector3 headshotDir = SafeNormalize(diff);
                     if (std::isfinite(headshotDir.x) && std::isfinite(headshotDir.y) && std::isfinite(headshotDir.z)) {
-                        // Smoothly blend direction to eliminate micro-jitter between frames
+                        // High-responsiveness direction blending (85% instant convergence per tick)
                         Vector3 finalDir = headshotDir;
                         if (s_prevDir != Vector3::Zero()) {
-                            finalDir.x = s_prevDir.x + (headshotDir.x - s_prevDir.x) * 0.45f;
-                            finalDir.y = s_prevDir.y + (headshotDir.y - s_prevDir.y) * 0.45f;
-                            finalDir.z = s_prevDir.z + (headshotDir.z - s_prevDir.z) * 0.45f;
+                            finalDir.x = s_prevDir.x + (headshotDir.x - s_prevDir.x) * 0.85f;
+                            finalDir.y = s_prevDir.y + (headshotDir.y - s_prevDir.y) * 0.85f;
+                            finalDir.z = s_prevDir.z + (headshotDir.z - s_prevDir.z) * 0.85f;
                             finalDir = SafeNormalize(finalDir);
                         }
                         s_prevDir = finalDir;
