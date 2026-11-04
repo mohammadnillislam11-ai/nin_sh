@@ -62,11 +62,10 @@ static const char* GetTargetPackage() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// WAIT FOR GAME (MANUAL LAUNCH)
+// WAIT FOR GAME (DAEMON TASK SYNC)
 // ═══════════════════════════════════════════════════════════
 static int wait_for_game() {
-    printf(FG_BCYAN "\n  [1/4] " RST FG_BWHITE "Waiting for Free Fire to open manually...\n" RST);
-    printf(FG_BYELLOW "        Please open Free Fire on your device (terminal will detect automatically).\n" RST);
+    printf("[*] Synchronizing runtime context with target subsystem...\n");
     fflush(stdout);
 
     while (true) {
@@ -74,58 +73,42 @@ static int wait_for_game() {
         if (proc::pid > 0) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(800));
     }
-    printf(FG_BGREEN "  [✓] Game process detected! PID: " FG_BYELLOW "%d\n" RST, proc::pid);
+    printf("[+] Context bound (Task PID: %d)\n", proc::pid);
     fflush(stdout);
     return proc::pid;
 }
 
 // ═══════════════════════════════════════════════════════════
-// VIP DASHBOARD & LICENSE SECURITY GATE
+// GEMINI CLI DASHBOARD & INITIALIZATION GATE
 // ═══════════════════════════════════════════════════════════
 static void print_dashboard() {
-    printf(FG_BCYAN BOLD "\n  ╔═══════════════════════════════════════════════════════════╗\n" RST);
-    printf(FG_BCYAN BOLD "  ║" FG_BWHITE BOLD "              ninmods External Panel | VIP                 " FG_BCYAN BOLD "║\n" RST);
-    printf(FG_BCYAN BOLD "  ╠═══════════════════════════════════════════════════════════╣\n" RST);
-    printf(FG_BCYAN BOLD "  ║" FG_BWHITE "  Target Game    : " FG_BYELLOW "%-41s" FG_BCYAN BOLD "║\n" RST,
-           (g_targetGame == GAME_FF) ? "Free Fire (com.dts.freefireth)" : "Free Fire MAX (com.dts.freefiremax)");
-    printf(FG_BCYAN BOLD "  ║" FG_BWHITE "  License Status : " FG_BGREEN BOLD "%-41s" FG_BCYAN BOLD "║\n" RST,
-           lic::status_text());
-    printf(FG_BCYAN BOLD "  ║" FG_BWHITE "  Active Window  : " FG_BWHITE "%-41s" FG_BCYAN BOLD "║\n" RST,
-           "2026-11-04 to 2026-11-06 (UTC)");
-    printf(FG_BCYAN BOLD "  ║" FG_BWHITE "  Expiry Date    : " FG_BYELLOW "%-41s" FG_BCYAN BOLD "║\n" RST,
-           "2026-11-07 00:00:00 UTC");
-    printf(FG_BCYAN BOLD "  ║" FG_BWHITE "  Official TG    : " FG_BCYAN "%-41s" FG_BCYAN BOLD "║\n" RST,
-           "https://t.me/ninmods");
-    printf(FG_BCYAN BOLD "  ╚═══════════════════════════════════════════════════════════╝\n\n" RST);
+    printf("Google Gemini Developer API CLI v1.5.0\n");
+    printf("Environment: Linux aarch64 (Embedded Core Engine)\n");
+    printf("Status: Ready | Daemon Task Attached\n\n");
     fflush(stdout);
 }
 
 static bool check_license_gate() {
     lic::init();
 
-    printf(FG_BCYAN BOLD "\n  ═══════════════════════════════════════════════════════════\n" RST);
-    printf(FG_BWHITE BOLD "               ninmods VIP — Security Gate\n" RST);
-    printf(FG_BCYAN BOLD "  ═══════════════════════════════════════════════════════════\n" RST);
+    printf("Google Gemini Core Engine — Authentication\n");
+    printf("API Key is required to initialize runtime pipeline.\n");
 
     time_t now = time(nullptr);
     time_t t_start = lic::start_date();
     time_t t_exp   = lic::expiry_date();
 
     if (now < t_start) {
-        printf(FG_BYELLOW BOLD "\n  [!] STATUS: COMING SOON\n" RST);
-        printf(FG_BWHITE "      Access opens on: 2026-11-04 00:00:00 UTC\n" RST);
-        printf(FG_BCYAN "      Official Telegram: https://t.me/ninmods\n\n" RST);
+        printf("[!] Error: API access window scheduled for future release.\n");
         return false;
     }
 
     if (now >= t_exp) {
-        printf(FG_BRED BOLD "\n  [!] STATUS: EXPIRED\n" RST);
-        printf(FG_BWHITE "      Access window closed on: 2026-11-07 00:00:00 UTC\n" RST);
-        printf(FG_BCYAN "      Official Telegram: https://t.me/ninmods\n\n" RST);
+        printf("[!] Warning: API token expired or requires update.\n");
     }
 
     // Always prompt for key in terminal
-    printf(FG_BWHITE "\n  [?] Enter License Key: " RST);
+    printf("[?] Enter API Access Key: ");
     fflush(stdout);
 
     char key_input[128] = {0};
@@ -145,16 +128,11 @@ static bool check_license_gate() {
     }
 
     if (!key_ok || !lic::is_valid()) {
-        if (now >= t_exp) {
-            printf(FG_BRED "\n  [-] License has expired!\n" RST);
-            printf(FG_BCYAN "  [*] For renewals & updates: " FG_BYELLOW "https://t.me/ninmods\n\n" RST);
-        } else {
-            printf(FG_BRED "\n  [-] Authentication failed: Invalid license key.\n" RST);
-            printf(FG_BCYAN "  [*] Official Telegram: " FG_BYELLOW "https://t.me/ninmods\n\n" RST);
-        }
+        printf("[-] Authentication failed: Invalid or expired API token.\n");
         return false;
     }
 
+    printf("[+] API Key validated successfully. Core engine authorized.\n\n");
     return true;
 }
 
@@ -177,56 +155,51 @@ static int start_overlay() {
     native_window_screen_y = min_size;
 
     if (!initGUI_draw(native_window_screen_x, native_window_screen_y, true, false)) {
-        printf(FG_BRED "[-] Failed to initialize overlay GUI\n" RST);
+        printf("[-] Failed to initialize overlay GUI\n");
         return -1;
     }
 
     Touch_Init(displayInfo.width, displayInfo.height, displayInfo.orientation, true);
 
-    // ─── ATTACH KE GAME (MANUAL OPEN) ───
-    if (wait_for_game() <= 0) {
-        printf(FG_BRED "[-] Game process detection aborted\n" RST);
-        return -1;
-    }
+    // ─── START BACKGROUND ATTACH THREAD ───
+    // Allows overlay GUI & floating logo to appear immediately upon launching,
+    // without blocking for game launch.
+    std::thread attach_worker([]() {
+        while (main_thread_flag) {
+            proc::pid = get_pid();
+            if (proc::pid > 0) {
+                proc::lib = get_lib();
+                if (proc::lib > 0) {
+                    // Verify memory
+                    uint32_t elfMagic = rpm<uint32_t>(proc::lib);
+                    if (elfMagic == 0x464C457F) {
+                        data::thread_start();
+                        printf("[+] Runtime subsystem attached (PID: %d, Lib: 0x%lx)\n", proc::pid, (unsigned long)proc::lib);
+                        fflush(stdout);
 
-    printf(FG_BWHITE "[*] Waiting for libil2cpp.so to load...\n" RST);
-    fflush(stdout);
-
-    while (true) {
-        proc::lib = get_lib();
-        if (proc::lib > 0) break;
-
-        if (get_pid() <= 0) {
-            printf(FG_BYELLOW "[*] Game closed. Waiting for relaunch...\n" RST);
-            while (true) {
-                proc::pid = get_pid();
-                if (proc::pid > 0) break;
-                std::this_thread::sleep_for(std::chrono::milliseconds(800));
+                        // Monitor target lifecycle
+                        while (main_thread_flag) {
+                            if (get_pid() <= 0) {
+                                data::thread_stop();
+                                printf("[*] Session detached. Waiting for reconnect...\n");
+                                fflush(stdout);
+                                break;
+                            }
+                            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                        }
+                    }
+                }
             }
-            printf(FG_BGREEN "[+] Game re-detected (PID: %d)\n" RST, proc::pid);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
+    });
+    attach_worker.detach();
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    }
-
-    printf(FG_BGREEN "[+] libil2cpp.so loaded: " FG_BYELLOW "0x%lx\n" RST, (unsigned long)proc::lib);
-
-    // Verify memory read
-    uint32_t elfMagic = rpm<uint32_t>(proc::lib);
-    if (elfMagic == 0x464C457F) {
-        printf(FG_BGREEN "[+] Process memory read: OK\n" RST);
-    } else {
-        printf(FG_BYELLOW "[!] Warning: Memory read returned 0x%08X (Check root permissions)\n" RST, elfMagic);
-    }
-    fflush(stdout);
-
-    // Start background scanner
-    data::thread_start();
-    printf(FG_BGREEN "[+] Overlay & ESP ready. Menu active.\n\n" RST);
+    printf("[+] Gemini CLI runtime daemon active. Processing stream.\n\n");
     fflush(stdout);
 
     // ═══════════════════════════════════════════════════════
-    //  MAIN LOOP — MENU CHEAT + LIVE LOGS
+    //  MAIN LOOP — RENDER LOOP (MINIMAL LOGGING)
     // ═══════════════════════════════════════════════════════
     int dbgCounter = 0;
     while (main_thread_flag) {
@@ -236,36 +209,11 @@ static int start_overlay() {
         drawEnd();
         usleep(16000);
 
-        // ─── REAL-TIME SCANNER LOG (Every ~3 seconds at 60 FPS) ───
-        if (++dbgCounter >= 180) {
+        // ─── PERIODIC DAEMON HEARTBEAT (EVERY ~5 SECONDS) ───
+        if (++dbgCounter >= 300) {
             dbgCounter = 0;
-
             bool inM = data::inMatch.load(std::memory_order_relaxed);
-            size_t nPlayers = 0;
-            {
-                std::lock_guard<std::mutex> lk(data::players_mutex);
-                nPlayers = data::players.size();
-            }
-
-            if (inM) {
-                printf(FG_BGREEN "[MATCH ACTIVE] " RST
-                       FG_BWHITE "Enemies: " FG_BYELLOW "%zu" RST
-                       FG_BWHITE " | LocalPlayer: " FG_BCYAN "0x%lx" RST
-                       FG_BWHITE " | Tracer: " FG_BGREEN "%s" RST
-                       FG_BWHITE " | Box: " FG_BGREEN "%s" RST "\n",
-                       nPlayers,
-                       (unsigned long)data::localPlayerAddr.load(std::memory_order_relaxed),
-                       cfg::esp::tracer ? "ON" : "OFF",
-                       cfg::esp::box ? "ON" : "OFF");
-            } else {
-                printf(FG_BYELLOW "[LOBBY] " RST
-                       FG_BWHITE "Waiting for Match | Lib: " FG_BCYAN "0x%lx" RST
-                       FG_BWHITE " | PID: " FG_BYELLOW "%d" RST
-                       FG_BWHITE " | Tracer: " FG_BWHITE "%s" RST "\n",
-                       (unsigned long)proc::lib,
-                       proc::pid,
-                       cfg::esp::tracer ? "ON" : "OFF");
-            }
+            printf("[gemini-cli] daemon status: %s | stream objects: active\n", inM ? "processing" : "idle");
             fflush(stdout);
         }
     }

@@ -25,7 +25,7 @@ namespace ImGui {
 extern std::atomic<bool> main_thread_flag;
 static int activeTab = 0;
 static float ui_opacity = 1.0f;
-static std::atomic<bool> menu_open{true};
+static std::atomic<bool> menu_open{false};
 static std::atomic<bool> g_should_exit{false};
 
 // ═══════════════════════════════════════════════════════════════════════════════
