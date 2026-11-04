@@ -9,6 +9,7 @@
 #include <string>
 #include <cmath>
 #include <algorithm>
+#include <mutex>
 
 using namespace ImGui;
 
@@ -97,7 +98,7 @@ static void DrawVectorIcon(ImDrawList* dl, EIconType type, ImVec2 center, float 
             break;
         }
         case ICON_POWER: {
-            // Authentic Power Arc with gap at the top (no clear rect needed!)
+            // Authentic Power Arc with gap at the top
             float r = size * 0.38f;
             dl->PathClear();
             dl->PathArcTo(center, r, -2.10f, 5.24f, 20); // ~ -120 deg to ~ 300 deg
@@ -141,6 +142,15 @@ static bool DrawSidebarIconButton(const char* str_id, EIconType icon_type, bool 
 namespace ui::menu {
 
     void render() {
+        // Safe exit helper lambda (Single source of truth)
+        auto safeExit = []() {
+            main_thread_flag = false;
+            Touch_Close();
+            data::thread_stop();
+            shutdown();
+            exit(0);
+        };
+
         // Always render ESP overlays on the background
         func::esp::draw();
 
@@ -308,11 +318,7 @@ namespace ui::menu {
                 // Bottom Safe Exit Icon (Anchored precisely to bottom edge)
                 ImGui::SetCursorPos(ImVec2(5.0f, bodyH - 52.0f));
                 if (DrawSidebarIconButton("##TabPower", ICON_POWER, false, btnSize)) {
-                    main_thread_flag = false;
-                    Touch_Close();
-                    data::thread_stop();
-                    shutdown();
-                    exit(0);
+                    safeExit();
                 }
             }
             ImGui::EndChild();
@@ -350,10 +356,11 @@ namespace ui::menu {
 
                     ImGui::Checkbox("ESP Box (Chaturbhuj)", &cfg::esp::box);
                     ImGui::Checkbox("ESP Health Bar (Right)", &cfg::esp::health);
+                    ImGui::Checkbox("ESP Armor Bar", &cfg::esp::armor);
                     ImGui::Checkbox("ESP Laser Line", &cfg::esp::tracer);
                     ImGui::Checkbox("ESP Player Name", &cfg::esp::name);
                     ImGui::Checkbox("ESP Distance", &cfg::esp::distance);
-                    ImGui::Checkbox("ESP Armor Bar", &cfg::esp::armor);
+                    ImGui::Checkbox("ESP Bot Tag (AI)", &cfg::esp::bot_tag);
                     ImGui::Checkbox("ESP Weapon Name", &cfg::esp::weapon);
                     ImGui::Checkbox("Firing Indicator", &cfg::esp::firing_ind);
                 }
@@ -368,7 +375,7 @@ namespace ui::menu {
                     cdl->AddLine(ImVec2(rpos.x, rpos.y - 4), ImVec2(rpos.x + 120, rpos.y - 4), theme_orchid::ColPrimary, 2.0f);
                     ImGui::Dummy(ImVec2(0, 4));
 
-                    ImGui::Checkbox("Ignore Bots", &cfg::esp::bot_tag);
+                    ImGui::Checkbox("Ignore Bot Players", &cfg::esp::ignore_bots);
                     ImGui::Checkbox("Crosshair Center", &cfg::esp::crosshair);
                     ImGui::Checkbox("Loot ESP", &cfg::esp::loot);
 
@@ -385,8 +392,13 @@ namespace ui::menu {
 
                     ImGui::Dummy(ImVec2(0, 4));
                     ImGui::SetNextItemWidth(-1);
-                    ImGui::SliderFloat("##LaserThickness", &cfg::esp::box_thickness, 1.0f, 5.0f, "%.1f px");
+                    ImGui::SliderFloat("##LaserThickness", &cfg::esp::tracer_thickness, 0.5f, 4.0f, "%.1f px");
                     ImGui::TextDisabled("Laser Line Width");
+
+                    ImGui::Dummy(ImVec2(0, 4));
+                    ImGui::SetNextItemWidth(-1);
+                    ImGui::SliderFloat("##BoxThickness", &cfg::esp::box_thickness, 1.0f, 5.0f, "%.1f px");
+                    ImGui::TextDisabled("Box Border Width");
                 }
                 ImGui::EndChild();
             }
@@ -394,7 +406,7 @@ namespace ui::menu {
             // TAB 1: COMBAT & TARGET FILTERS (DUAL COLUMN)
             // ══════════════════════════════════════════════════════════════════
             else if (activeTab == 1) {
-                // Left Column: Targeting options
+                // Left Column: Targeting options (Bound to cfg::combat::*)
                 ImGui::SetCursorPos(ImVec2(contentX, contentY));
                 if (ImGui::BeginChild("##ColLeftCombat", ImVec2(colW, contentH), true)) {
                     ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.80f, 1.0f), "TARGET PRIORITY");
@@ -403,9 +415,9 @@ namespace ui::menu {
                     cdl->AddLine(ImVec2(lpos.x, lpos.y - 4), ImVec2(lpos.x + 110, lpos.y - 4), theme_orchid::ColPrimary, 2.0f);
                     ImGui::Dummy(ImVec2(0, 4));
 
-                    ImGui::Checkbox("Auto Target Closest", &cfg::esp::firing_ind);
-                    ImGui::Checkbox("Prioritize Low HP", &cfg::esp::health);
-                    ImGui::Checkbox("Filter Invisible Enemies", &cfg::esp::box);
+                    ImGui::Checkbox("Auto Target Closest", &cfg::combat::auto_target_closest);
+                    ImGui::Checkbox("Prioritize Low HP", &cfg::combat::prioritize_low_hp);
+                    ImGui::Checkbox("Filter Invisible Enemies", &cfg::combat::filter_invisible);
 
                     ImGui::Dummy(ImVec2(0, 10));
                     ImGui::TextDisabled("Tactical Notice:");
@@ -413,7 +425,7 @@ namespace ui::menu {
                 }
                 ImGui::EndChild();
 
-                // Right Column: Target info & details
+                // Right Column: Target info & live diagnostics
                 ImGui::SetCursorPos(ImVec2(contentX + colW + colGap, contentY));
                 if (ImGui::BeginChild("##ColRightCombat", ImVec2(colW, contentH), true)) {
                     ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.80f, 1.0f), "FOV & RANGES");
@@ -427,9 +439,38 @@ namespace ui::menu {
                     ImGui::TextDisabled("Loot Scan Radius");
 
                     ImGui::Dummy(ImVec2(0, 10));
-                    ImGui::Text("Active Target: None");
-                    ImGui::Text("Target Distance: -- m");
-                    ImGui::Text("Target Health: --");
+
+                    // Live target finder from data::players
+                    std::string targetName = "None";
+                    float targetDist = 0.0f;
+                    int targetHP = 0;
+                    bool targetFound = false;
+
+                    {
+                        std::lock_guard<std::mutex> lk(data::players_mutex);
+                        float minDist = 999999.0f;
+                        for (const auto& p : data::players) {
+                            if (p.Head.z < 0.001f || p.Toe.z < 0.001f) continue;
+                            if (p.isBot && cfg::esp::ignore_bots) continue;
+                            if (p.distance < minDist) {
+                                minDist = p.distance;
+                                targetName = p.name[0] ? p.name : (p.isBot ? "BOT" : "Player");
+                                targetDist = p.distance;
+                                targetHP = p.curHP;
+                                targetFound = true;
+                            }
+                        }
+                    }
+
+                    if (targetFound) {
+                        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "Active Target: %s", targetName.c_str());
+                        ImGui::Text("Target Distance: %.1f m", targetDist);
+                        ImGui::Text("Target Health: %d HP", targetHP);
+                    } else {
+                        ImGui::TextDisabled("Active Target: None (Scanning)");
+                        ImGui::TextDisabled("Target Distance: -- m");
+                        ImGui::TextDisabled("Target Health: --");
+                    }
                 }
                 ImGui::EndChild();
             }
@@ -469,19 +510,20 @@ namespace ui::menu {
                     ImGui::Dummy(ImVec2(0, 4));
 
                     ImGui::Text("Target PID: %d", proc::pid);
-                    ImGui::TextColored(proc::lib ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0.8f, 0, 1),
-                        proc::lib ? "libil2cpp: 0x%lx" : "Waiting for Game...",
-                        (unsigned long)proc::lib);
+
+                    // Separate clean format if/else without ternary format mismatches
+                    if (proc::lib) {
+                        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.5f, 1.0f), "libil2cpp: 0x%lx", (unsigned long)proc::lib);
+                    } else {
+                        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Waiting for Game...");
+                    }
+
                     ImGui::Text("Overlay FPS: %.1f", io.Framerate);
                     ImGui::Text("Screen: %.0f x %.0f", realW, realH);
 
                     ImGui::Dummy(ImVec2(0, 12));
                     if (ImGui::Button("SAFE EXIT APPLICATION", ImVec2(ImGui::GetContentRegionAvail().x, 38))) {
-                        main_thread_flag = false;
-                        Touch_Close();
-                        data::thread_stop();
-                        shutdown();
-                        exit(0);
+                        safeExit();
                     }
                 }
                 ImGui::EndChild();

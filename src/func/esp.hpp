@@ -403,6 +403,7 @@ namespace func::esp {
 
         for (const auto& p : snap) {
             if (p.Head.z < 0.001f || p.Toe.z < 0.001f) continue;
+            if (cfg::esp::ignore_bots && p.isBot) continue;
 
             if (p.distance > cfg::esp::max_range) continue;
 
@@ -424,11 +425,12 @@ namespace func::esp {
             if (cfg::esp::tracer) {
                 ImVec2 head(p.Head.x, p.Head.y);
                 float aa = ImClamp(1.f - p.distance / cfg::esp::max_range, 0.25f, 1.f);
-                // Sleek, refined tracer line (slightly thinner laser look)
+                float tThick = cfg::esp::tracer_thickness;
+                // Sleek dynamic laser line with soft glow
                 dl->AddLine(anchor, head,
-                    withAlpha(toU32(cfg::esp::box_col), 0.25f * aa), 2.6f);
+                    withAlpha(toU32(cfg::esp::box_col), 0.25f * aa), tThick + 1.4f);
                 dl->AddLine(anchor, head,
-                    withAlpha(toU32(cfg::esp::box_col), 0.95f * aa), 1.2f);
+                    withAlpha(toU32(cfg::esp::box_col), 0.95f * aa), tThick);
             }
 
             if (cfg::esp::box)
