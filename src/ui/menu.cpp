@@ -15,51 +15,6 @@ extern bool main_thread_flag;
 static int activeTab = 0;
 static float ui_opacity = 1.0f;
 
-// Floating icons toggles (Brutal UI feature)
-static bool showFloatingIcons = false;
-static bool floatESP = false;
-
-// Custom Brutal Toggle Switch
-static bool ToggleSwitch(const char* id, bool* v)
-{
-    ImVec2 p = ImGui::GetCursorScreenPos();
-    ImDrawList* draw = ImGui::GetWindowDrawList();
-
-    const float height = 38.0f;   
-    const float width  = 85.0f;  
-    const float radius = height * 0.5f;
-
-    ImGui::InvisibleButton(id, ImVec2(width, height));
-    if (ImGui::IsItemClicked())
-        *v = !(*v);
-
-    ImU32 col_bg = *v ? IM_COL32(0, 255, 150, 255) : IM_COL32(45, 45, 45, 255);
-
-    if (*v)
-    {
-        draw->AddRectFilled(
-            ImVec2(p.x - 2, p.y - 2),
-            ImVec2(p.x + width + 2, p.y + height + 2),
-            IM_COL32(0, 255, 150, 60),
-            height * 0.6f);
-    }
-
-    draw->AddRectFilled(
-        p,
-        ImVec2(p.x + width, p.y + height),
-        col_bg,
-        height * 0.6f);
-
-    float t = *v ? (width - radius) : radius;
-
-    draw->AddCircleFilled(
-        ImVec2(p.x + t, p.y + radius),
-        radius - 3.0f,
-        IM_COL32(255, 255, 255, 255));
-
-    return *v;
-}
-
 namespace ui::menu {
 
     void render() {
@@ -133,11 +88,6 @@ namespace ui::menu {
                 ImGui::SeparatorText("Configuration & Targets");
                 ImGui::Dummy(ImVec2(0, 5));
 
-                if (ImGui::Checkbox("Floating Quick ESP Icon", &showFloatingIcons)) {
-                    floatESP = showFloatingIcons;
-                }
-
-                ImGui::Dummy(ImVec2(0, 5));
                 if (ImGui::SliderFloat("UI Opacity", &ui_opacity, 0.2f, 1.0f, "%.2f")) {
                     ImGui::GetStyle().Alpha = ui_opacity;
                 }
@@ -171,29 +121,5 @@ namespace ui::menu {
             }
         }
         ImGui::End();
-
-        // Brutal-style Floating Quick Toggle Windows
-        if (showFloatingIcons)
-        {
-            const ImVec2 winSize = ImVec2(200, 105); 
-
-            auto DrawHeader = [&](const char* title, bool* visible) {
-                ImGui::Text("%s", title);
-                ImGui::SameLine(ImGui::GetWindowWidth() - 25);
-                if (ImGui::Selectable("x", false, 0, ImVec2(14, 14))) {
-                    *visible = false;
-                }
-                ImGui::Separator();
-            };
-            
-            if (floatESP) {
-                ImGui::SetNextWindowSize(winSize, ImGuiCond_Always);
-                ImGui::SetNextWindowPos(ImVec2(60, 240), ImGuiCond_FirstUseEver);
-                ImGui::Begin("##FloatESP", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
-                DrawHeader(" ESP TRACER ", &floatESP);
-                ToggleSwitch("##espFloat", &cfg::esp::tracer);
-                ImGui::End();
-            }
-        }
     }
 }
