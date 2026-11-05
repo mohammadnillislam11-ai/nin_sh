@@ -71,7 +71,9 @@ namespace Offsets {
         constexpr uintptr_t Uma                  = 0x138;
         constexpr uintptr_t Uma_Visible          = 0x101;
         constexpr uintptr_t Uma_Data             = 0x28;
-        constexpr uintptr_t UmaData_Skip         = 0x91;
+        constexpr uintptr_t UmaData_LocalPlayer  = 0x80;    // Boolean: UMAData.isLocalPlayer
+        constexpr uintptr_t UmaData_Teammate     = 0x81;    // Boolean: UMAData.isTeammate (Zero overhead filtering)
+        constexpr uintptr_t UmaData_Skip         = 0x81;    // Alias for teammate filter
     }
 
     // ── Camera Chain ──

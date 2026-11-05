@@ -281,9 +281,12 @@ namespace data {
                 }
             }
 
-            // Team
+            // Filter teammates & local player via UMAData flags (0x81 = isTeammate, 0x80 = isLocalPlayer)
             auto umaData = rpm<uint64_t>(uma + Offsets::Uma_Data);
-            if (umaData && rpm<bool>(umaData + Offsets::UmaData_Skip)) continue;
+            if (umaData) {
+                if (rpm<bool>(umaData + Offsets::Avatar::UmaData_Teammate)) continue;
+                if (rpm<bool>(umaData + Offsets::Avatar::UmaData_LocalPlayer)) continue;
+            }
 
             // Head world
             uint64_t hNode = rpm<uint64_t>(enemy + Offsets::Bone_Head);
