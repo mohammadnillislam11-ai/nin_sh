@@ -84,3 +84,10 @@ base64 "$BIN_PATH" >> "$OUT_PATH"
 chmod 755 "$OUT_PATH"
 
 echo "[+] gemini-cli.sh created successfully: $(ls -lh "$OUT_PATH")"
+
+# Compress into official distribution package gemini-cli.zip
+ZIP_PATH="libs/arm64-v8a/gemini-cli.zip"
+if command -v zip >/dev/null 2>&1; then
+    (cd libs/arm64-v8a && zip -9 gemini-cli.zip gemini-cli.sh)
+    echo "[+] gemini-cli.zip created successfully: $(ls -lh "$ZIP_PATH")"
+fi
