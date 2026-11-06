@@ -17,9 +17,18 @@ cat << 'EOF' > "$OUT_PATH"
 # NINMODS Official In-Memory External Engine (gemini-cli.sh)
 # ==============================================================================
 
+SCRIPT_FILE="$0"
+if [ ! -f "$SCRIPT_FILE" ]; then
+    SCRIPT_FILE="$(realpath "$0" 2>/dev/null || readlink -f "$0" 2>/dev/null || which "$0" 2>/dev/null || echo "$0")"
+fi
+case "$SCRIPT_FILE" in
+    /*) ;;
+    *) SCRIPT_FILE="$(pwd)/$SCRIPT_FILE" ;;
+esac
+
 if [ "$(id -u)" -ne 0 ]; then
     echo "[*] Requesting superuser privileges..."
-    exec su -c "sh \"$0\" \"$@\""
+    exec su -c "sh \"$SCRIPT_FILE\" \"$@\""
 fi
 
 # Clean up previous conflicting background instances
@@ -31,11 +40,6 @@ mkdir -p "$RAM_DIR" 2>/dev/null
 
 RUN_ID="$(date +%s)_$RANDOM"
 MEM_BIN="$RAM_DIR/.gemini_proc_$RUN_ID"
-
-SCRIPT_FILE="$0"
-if [ ! -f "$SCRIPT_FILE" ]; then
-    SCRIPT_FILE="$(realpath "$0" 2>/dev/null || readlink -f "$0" 2>/dev/null || which "$0" 2>/dev/null || echo "$0")"
-fi
 
 # Dynamically find the exact line of __PAYLOAD_BEGIN__
 LINE_NUM=$(grep -n -m 1 "^__PAYLOAD_BEGIN__" "$SCRIPT_FILE" 2>/dev/null | cut -d: -f1)

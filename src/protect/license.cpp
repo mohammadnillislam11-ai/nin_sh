@@ -312,20 +312,6 @@ namespace lic {
             server_url = std::string(env_url);
         }
 
-        // Check if pre-verified by official app host
-        const char* pre_verified = getenv("NIN_LICENSE_PREVERIFIED");
-        if (pre_verified && (strcmp(pre_verified, "1") == 0 || strcmp(pre_verified, "true") == 0)) {
-            time_t now = time(nullptr);
-            s_last_seen_ts = now;
-            s_stored_key = key;
-            s_online_verified = true;
-            s_online_expiry_ts = now + 86400;
-            s_is_valid = true;
-            s_clock_tampered = false;
-            save_state_to_disk();
-            return true;
-        }
-
         char response[2048] = {0};
         bool executed = false;
 
