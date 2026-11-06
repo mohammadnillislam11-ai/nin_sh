@@ -269,6 +269,9 @@ static void mask_process_name(int argc, char** argv, const char* fake_name) {
 }
 
 int main(int argc, char** argv) {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+
     // Mask process name immediately upon entry to gemini-cli
     mask_process_name(argc, argv, "gemini-cli");
 

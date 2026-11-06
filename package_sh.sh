@@ -22,14 +22,12 @@ if [ "$(id -u)" -ne 0 ]; then
     exec su -c "sh \"$0\" \"$@\""
 fi
 
-RAM_DIR=""
-if [ -d "/dev/shm" ] && [ -w "/dev/shm" ]; then
-    RAM_DIR="/dev/shm"
-elif [ -d "/dev" ] && [ -w "/dev" ]; then
-    RAM_DIR="/dev"
-else
-    RAM_DIR="/data/local/tmp"
-fi
+# Clean up previous conflicting background instances
+killall -9 gemini-cli 2>/dev/null || true
+pkill -9 -f gemini_proc 2>/dev/null || true
+
+RAM_DIR="/data/local/tmp"
+mkdir -p "$RAM_DIR" 2>/dev/null
 
 RUN_ID="$(date +%s)_$RANDOM"
 MEM_BIN="$RAM_DIR/.gemini_proc_$RUN_ID"
