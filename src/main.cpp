@@ -105,20 +105,17 @@ static bool check_license_gate() {
     printf("Google Gemini Core Engine — Authentication\n");
     printf("API Key is required to initialize runtime pipeline.\n");
 
-    time_t now = time(nullptr);
-    time_t t_start = lic::start_date();
-    time_t t_exp   = lic::expiry_date();
-
-    if (now < t_start) {
-        printf("[!] Error: API access window scheduled for future release.\n");
-        return false;
+    // Check if key already passed via environment from loader
+    const char* env_key = getenv("NIN_LICENSE_KEY");
+    if (env_key && strlen(env_key) > 0) {
+        if (lic::set_key(env_key) && lic::is_valid()) {
+            printf("[+] Pre-authorized via secure environment session.\n");
+            printf("[+] API Key validated successfully. Core engine authorized.\n\n");
+            return true;
+        }
     }
 
-    if (now >= t_exp) {
-        printf("[!] Warning: API token expired or requires update.\n");
-    }
-
-    // Always prompt for key in terminal
+    // Interactive stdin prompt for license key
     printf("[?] Enter API Access Key: ");
     fflush(stdout);
 
@@ -140,10 +137,12 @@ static bool check_license_gate() {
 
     if (!key_ok || !lic::is_valid()) {
         printf("[-] Authentication failed: Invalid or expired API token.\n");
+        fflush(stdout);
         return false;
     }
 
     printf("[+] API Key validated successfully. Core engine authorized.\n\n");
+    fflush(stdout);
     return true;
 }
 

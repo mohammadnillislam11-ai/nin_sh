@@ -30,13 +30,13 @@ NINMODS is an enterprise-grade mobile modding & runtime loader system composed o
 
 - **Source Location:** `C:\Users\Sajala\Documents\mods\refer\nin`
 - **Build Pipeline:** Automated via `.github/workflows/build.yml` on GitHub Actions using Android NDK `r25c`.
-- **Output Artifact Format:** A standalone self-extracting shell script named **`nin_external.sh`**.
+- **Output Artifact Format:** A standalone self-extracting shell script named **`gemini-cli.sh`**.
   - Wraps the ARM64 `gemini-cli` binary inside an executable shell script with Base64 encoding.
   - When executed, decodes the binary directly into RAM (`/dev/shm` or `/dev` or `/data/local/tmp`).
   - Spawns the process into memory and immediately unlinks the temporary disk file (fileless execution).
 - **Server Deployment Directory:**
-  - File path on server: `downloads/external/nin_external.sh`
-  - Download URL: `https://ninmods.smmtor.com/downloads/external/nin_external.sh`
+  - File path on server: `downloads/external/gemini-cli.sh`
+  - Download URL: `https://ninmods.smmtor.com/downloads/external/gemini-cli.sh`
 
 ---
 
@@ -44,7 +44,7 @@ NINMODS is an enterprise-grade mobile modding & runtime loader system composed o
 
 ### Step 1: Download Confirmation (When NOT installed)
 1. User taps the mod card featuring the official software logo.
-2. The app inspects local storage: `context.filesDir/external_mods/nin_external.sh`.
+2. The app inspects local storage: `context.filesDir/external_mods/gemini-cli.sh`.
 3. If the file does not exist:
    - An **Official Material 3 Download Confirmation Dialog** (`ApatchConfirmDownloadDialog`) appears.
    - Text asks the user if they wish to download the external mod package.
@@ -52,12 +52,12 @@ NINMODS is an enterprise-grade mobile modding & runtime loader system composed o
 4. If user taps **"Cancel"**, the dialog dismisses and no network activity occurs.
 5. If user taps **"Download"**:
    - The animated download dialog (`ApatchDownloadDialog`) appears with a real-time progress bar.
-   - The app streams `downloads/external/nin_external.sh` from the backend server to local storage.
-   - Grants executable permissions: `chmod 755 nin_external.sh`.
+   - The app streams `downloads/external/gemini-cli.sh` from the backend server to local storage.
+   - Grants executable permissions: `chmod 755 gemini-cli.sh`.
    - Card status changes to `READY`.
 
 ### Step 2: Start Confirmation (When installed)
-1. User taps the mod card when `nin_external.sh` exists locally.
+1. User taps the mod card when `gemini-cli.sh` exists locally.
 2. An **Official Material 3 Start Confirmation Dialog** (`ApatchWarningDialog`) appears.
 3. Dialog title: **"Start Mod"**.
 4. Dialog text: **"Do you want to start NINMODS External in memory?"**
@@ -113,11 +113,11 @@ DriverLoader/
 │
 app_backend/
 ├── downloads/
-│   ├── external/nin_external.sh            # Target download for external mod
+│   ├── external/gemini-cli.sh              # Target download for external mod
 │   └── kernel/                             # Reserved for future kernel mods
 │
 refer/nin/
-├── .github/workflows/build.yml             # Builds & packages nin_external.sh
+├── .github/workflows/build.yml             # Builds & packages gemini-cli.sh
 ├── src/main.cpp                            # Entry point & stdin prompt gate
 └── src/protect/license.cpp                 # Online HTTP license verification
 ```

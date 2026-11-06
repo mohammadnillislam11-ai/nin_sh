@@ -267,6 +267,27 @@ namespace lic {
     }
 
     static std::string get_device_hwid() {
+        // 1. Environment variable passed directly from DriverLoader / root shell
+        const char* env_hwid = getenv("NIN_DEVICE_HWID");
+        if (env_hwid && strlen(env_hwid) > 0) {
+            return std::string(env_hwid);
+        }
+
+        // 2. Persistent file written by DriverLoader app
+        FILE* fp_file = fopen("/data/local/tmp/.nin_hwid", "r");
+        if (fp_file) {
+            char buf[128] = {0};
+            if (fgets(buf, sizeof(buf), fp_file)) {
+                buf[strcspn(buf, "\r\n")] = 0;
+                if (strlen(buf) > 0) {
+                    fclose(fp_file);
+                    return std::string(buf);
+                }
+            }
+            fclose(fp_file);
+        }
+
+        // 3. System properties fallback
         char buf[128] = {0};
         FILE* fp = popen("getprop ro.serialno 2>/dev/null", "r");
         if (fp) {
@@ -290,23 +311,62 @@ namespace lic {
 
     static bool verify_license_online(const std::string& key) {
         std::string hwid = get_device_hwid();
-        char cmd[1024];
-        snprintf(cmd, sizeof(cmd),
-            "curl -s -m 12 -X POST -H 'Content-Type: application/json' -d '{\"license_key\":\"%s\",\"hwid\":\"%s\"}' https://ninmods.smmtor.com/api/v2/app/activate 2>/dev/null",
-            key.c_str(), hwid.c_str());
+        std::string server_url = "https://ninmods.smmtor.com";
+        const char* env_url = getenv("NIN_SERVER_URL");
+        if (env_url && strlen(env_url) > 0) {
+            server_url = std::string(env_url);
+        }
 
-        FILE* fp = popen(cmd, "r");
-        if (!fp) return false;
+        // Multi-client candidate pool with -k / --insecure to bypass Android missing CA root store
+        const char* clients[] = {
+            "curl -k -s -m 12",
+            "/data/adb/ap/bin/curl -k -s -m 12",
+            "/data/adb/magisk/busybox curl -k -s -m 12",
+            "/data/adb/ksu/bin/curl -k -s -m 12",
+            "/system/bin/curl -k -s -m 12",
+            "/system/xbin/curl -k -s -m 12",
+            "wget -q --no-check-certificate -O - -T 12"
+        };
 
         char response[2048] = {0};
-        size_t bytesRead = fread(response, 1, sizeof(response) - 1, fp);
-        pclose(fp);
+        bool executed = false;
 
-        if (bytesRead == 0) return false;
-        response[bytesRead] = 0;
+        for (const char* client : clients) {
+            char cmd[1536];
+            if (strstr(client, "wget")) {
+                snprintf(cmd, sizeof(cmd),
+                    "%s --header='Content-Type: application/json' --post-data='{\"license_key\":\"%s\",\"hwid\":\"%s\"}' %s/api/v2/app/activate 2>/dev/null",
+                    client, key.c_str(), hwid.c_str(), server_url.c_str());
+            } else {
+                snprintf(cmd, sizeof(cmd),
+                    "%s -X POST -H 'Content-Type: application/json' -d '{\"license_key\":\"%s\",\"hwid\":\"%s\"}' %s/api/v2/app/activate 2>/dev/null",
+                    client, key.c_str(), hwid.c_str(), server_url.c_str());
+            }
+
+            FILE* fp = popen(cmd, "r");
+            if (fp) {
+                size_t bytesRead = fread(response, 1, sizeof(response) - 1, fp);
+                pclose(fp);
+                if (bytesRead > 0) {
+                    response[bytesRead] = 0;
+                    executed = true;
+                    break;
+                }
+            }
+        }
+
+        if (!executed || strlen(response) == 0) {
+            printf("[-] Network error: Unable to reach license verification gateway.\n");
+            fflush(stdout);
+            return false;
+        }
 
         // Check if server returned authentic active license
-        if (strstr(response, "\"success\":true") || strstr(response, "\"status\":\"activated\"") || strstr(response, "\"status\":true")) {
+        if (strstr(response, "\"success\":true") || 
+            strstr(response, "\"valid\":true") ||
+            strstr(response, "\"status\":\"active\"") || 
+            strstr(response, "\"status\":\"activated\"") || 
+            strstr(response, "\"status\":true")) {
             time_t now = time(nullptr);
             long remSec = 86400;
             const char* remPtr = strstr(response, "\"remaining_seconds\":");
@@ -325,7 +385,7 @@ namespace lic {
             return true;
         }
 
-        // Print server's descriptive rejection reason (e.g. expired or invalid)
+        // Print server's descriptive rejection reason (e.g. expired, invalid, device limit)
         const char* errPtr = strstr(response, "\"error\":\"");
         if (errPtr) {
             char errMsg[256] = {0};
