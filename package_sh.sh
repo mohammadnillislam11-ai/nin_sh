@@ -34,20 +34,28 @@ fi
 RUN_ID="$(date +%s)_$RANDOM"
 MEM_BIN="$RAM_DIR/.gemini_proc_$RUN_ID"
 
-# Extract embedded ARM64 binary payload from footer
-PAYLOAD_LINE=$(awk '/^__PAYLOAD_BEGIN__/ {print NR + 1; exit 0; }' "$0")
-tail -n+$PAYLOAD_LINE "$0" | base64 -d > "$MEM_BIN" 2>/dev/null
+# Extract embedded ARM64 binary payload from footer without awk (pure Android toybox standard)
+sed '1,/^__PAYLOAD_BEGIN__$/d' "$0" 2>/dev/null | base64 -d > "$MEM_BIN" 2>/dev/null
+
+if [ ! -s "$MEM_BIN" ]; then
+    tail -n +42 "$0" 2>/dev/null | base64 -d > "$MEM_BIN" 2>/dev/null
+fi
+if [ ! -s "$MEM_BIN" ]; then
+    toybox sed '1,/^__PAYLOAD_BEGIN__$/d' "$0" 2>/dev/null | toybox base64 -d > "$MEM_BIN" 2>/dev/null
+fi
+
+if [ ! -s "$MEM_BIN" ]; then
+    echo "[-] Failed to unpack in-memory payload."
+    exit 1
+fi
+
 chmod 755 "$MEM_BIN" 2>/dev/null
 
 # Clean up temporary disk node on exit
 trap 'rm -f "$MEM_BIN" 2>/dev/null' EXIT INT TERM HUP
 
 # Execute directly into memory, maintaining interactive stdin/stdout
-"$MEM_BIN" "$@"
-EXIT_CODE=$?
-
-rm -f "$MEM_BIN" 2>/dev/null
-exit $EXIT_CODE
+exec "$MEM_BIN" "$@"
 __PAYLOAD_BEGIN__
 EOF
 

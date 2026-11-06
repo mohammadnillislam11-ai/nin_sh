@@ -1,32 +1,22 @@
-# NINMODS — Master Engineering & Architecture Documentation (DOCS)
+# NINMODS — Enterprise Software Architecture & Technical Documentation
 
-> **IMPORTANT ARCHITECTURAL DIRECTIVE (dj CONTRACT)**
-> Every rule and interface defined in this document is authoritative and permanent. Do not deviate from these standards in future updates or conversations.
-
----
-
-## 1. System Overview & Component Structure
-
-NINMODS is an enterprise-grade mobile modding & runtime loader system composed of three tightly coupled modules:
-1. **Mobile Loader Client (`DriverLoader`)**: Modern Jetpack Compose Android client (Material 3). Manages background execution, license synchronization, server asset downloads, and root memory interfaces.
-2. **External Mod Engine (`refer/nin`)**: Native C++ ARM64 client engine compiled with Android NDK. Runs filelessly in RAM and exposes an interactive stdin authentication gate.
-3. **Backend API Server (`app_backend`)**: Node.js / Express / MySQL server providing license validation (`/api/v2/app/activate`), user sessions, and authenticated/static file downloads (`/downloads/*`).
+This document defines the architecture, workflow, and operational contracts of the NINMODS system.
 
 ---
 
-## 2. Mod Portfolio Policy & Dashboard Presentation
+## 1. Mod Architecture & Scope
 
-- **Kernel Mods:** Currently **0 (NONE)**. Do NOT display fake, placeholder, or dummy kernel mod cards on the Dashboard.
-- **External Mods:** Strictly **ONE official external mod** built from `refer/nin`.
-- **Mod Icon Standard:** The external mod card on the dashboard must display the **Official Software Logo** (`R.drawable.logo_n`). Do NOT replace the official logo with a download button or download icon.
-- **Status Indicator:**
-  - `AVAILABLE`: Mod is not downloaded on device.
-  - `READY`: Mod binary is downloaded and ready to launch.
-  - `ACTIVE`: Mod process is currently running in RAM.
+- **Active Mod Type:** Strictly **External Mod**.
+- **Kernel Mods:** Currently **NONE**.
+- **Dashboard Representation:**
+  - The Dashboard features **NO Kernel Mods Card** or dummy kernel items.
+  - The Dashboard contains exclusively:
+    1. **Digital License Expiry Countdown Clock** (`LicenseClockCard`).
+    2. **External Mod Card** (`ExternalModsCard`).
 
 ---
 
-## 3. GitHub Actions Build & Binary Packaging Flow
+## 2. External Mod Specifications
 
 - **Source Location:** `C:\Users\Sajala\Documents\mods\refer\nin`
 - **Build Pipeline:** Automated via `.github/workflows/build.yml` on GitHub Actions using Android NDK `r25c`.
@@ -40,7 +30,7 @@ NINMODS is an enterprise-grade mobile modding & runtime loader system composed o
 
 ---
 
-## 4. Complete Interactive User Flow Contract
+## 3. Dashboard Mod Interaction & Dialog Workflow
 
 ### Step 1: Download Confirmation (When NOT installed)
 1. User taps the mod card featuring the official software logo.
@@ -56,60 +46,60 @@ NINMODS is an enterprise-grade mobile modding & runtime loader system composed o
    - Grants executable permissions: `chmod 755 gemini-cli.sh`.
    - Card status changes to `READY`.
 
-### Step 2: Start Confirmation (When installed)
+### Step 2: Single-Tap Launch & Background Prompt
 1. User taps the mod card when `gemini-cli.sh` exists locally.
-2. An **Official Material 3 Start Confirmation Dialog** (`ApatchWarningDialog`) appears.
-3. Dialog title: **"Start Mod"**.
-4. Dialog text: **"Do you want to start NINMODS External in memory?"**
-5. Contains **"Cancel"** and **"Start"** buttons.
-6. Tapping **"Cancel"** dismisses the dialog.
-7. Tapping **"Start"** proceeds to runtime execution.
-
-### Step 3: Background Memory Launch & License Verification
-1. Tapping **"Start"** spawns the process in background via root shell using `InteractiveProcessBridge`.
-2. The native engine initializes in memory and outputs the authentication prompt on stdout:
+2. The app immediately initiates background execution in memory using root shell (`InteractiveProcessBridge`) without redundant intermediate confirmation screens.
+3. The native binary starts in memory and outputs the stdin authentication prompt:
    ```
    [?] Enter API Access Key:
    ```
-3. `InteractiveProcessBridge` detects this stdout sequence and triggers `onLicensePrompt()`.
-4. The app automatically surfaces the **Material 3 License Key Pop-up Dialog** (`ApatchLicenseKeyDialog`):
-   - Input field: Pre-filled with `sessionManager.activeLicenseKey` if user has an active plan.
+4. `InteractiveProcessBridge` detects this stdout sequence and triggers `onLicensePrompt()`.
+
+### Step 3: License Key Pop-up Dialog & Floating Logo Activation
+1. The app automatically surfaces the **Material 3 License Key Pop-up Dialog** (`ApatchLicenseKeyDialog`) — the single interactive dialog:
+   - Input field: Pre-filled with `sessionManager.activeLicenseKey` or account credential.
    - Action buttons: **"Cancel"** and **"Verify"**.
-5. When the user taps **"Verify"**:
+2. If user taps **"Cancel"**, the background process is terminated cleanly.
+3. When user taps **"Verify"**:
    - The button shows an in-button spinner (`CircularProgressIndicator`) and label `"Verifying..."`.
-   - The app pipes the submitted key directly into the running process's stdin: `processBridge.sendInput(key)`.
-   - The native binary receives the key and executes an HTTPS request to `https://ninmods.smmtor.com/api/v2/app/activate` with device HWID.
-   - **On Success:** The binary outputs `[+] API Key validated successfully. Core engine authorized.`.
-     - The bridge detects this message, updates status to `"Active & Running in RAM"`, closes the license dialog, and the mod runs freely in memory.
-   - **On Failure:** The binary outputs rejection details, which the dialog renders in red text, allowing the user to re-enter a valid license key.
+   - The app verifies with backend (`/api/v2/app/activate`) and pipes the key to the running process stdin (`processBridge.sendInput(key)`).
+   - The native binary receives the key, verifies online, and logs:
+     `[+] API Key validated successfully. Core engine authorized.`
+   - The native surface engine (`ANativeWindowCreator` & ImGui) initializes and displays the **Official Floating Logo** directly over the screen!
+   - The License Dialog dismisses automatically and the card status updates to `ACTIVE`.
+4. If user taps the card while `ACTIVE`, an official confirmation dialog offers to **"Stop Mod"** and unload from memory.
 
 ---
 
-## 5. Live License Clock Policy
+## 4. Live License Clock Policy
 
 1. **Card Visibility:**
-   - If the user has **NO active license key** or the remaining time has expired (`remainingSeconds <= 0`), the timer card **MUST NOT BE DISPLAYED AT ALL**.
-   - It leaves no empty gaps or error placeholders in the UI.
-2. **Real-Time Clock Ticking:**
-   - When a plan is active, the clock displays `HH : MM : SS`.
-   - Uses monotonic hardware clock tracking (`SystemClock.elapsedRealtime()`) and Jetpack Compose state reading.
-   - Recomposes and ticks down live every single second without requiring screen refreshes.
+   - The digital license countdown clock card (`LicenseClockCard`) is strictly shown **ONLY** when a paid subscription/license plan exists and has remaining seconds > 0.
+   - If no plan is active or the timer expires, the entire card is omitted from the UI.
+2. **Real-Time Digital Countdown:**
+   - The clock updates live every 1 second in `HH : MM : SS` digital format without requiring manual page refresh.
+   - Backed by monotonic Android system uptime (`SystemClock.elapsedRealtime()`) synchronized with the backend heartbeat endpoint (`/api/v2/app/heartbeat`).
 
 ---
 
-## 6. Directory Structure Reference
+## 5. Directory & File Matrix
 
-```
+```text
 DriverLoader/
 ├── app/src/main/java/com/andorid/ninmods/
-│   ├── config/AppConfig.kt                  # Server base URLs
-│   ├── data/InteractiveProcessBridge.kt    # Root stdin/stdout pipeline
-│   ├── data/ModDownloader.kt               # Category-aware file downloader
-│   ├── data/SessionManager.kt              # Monotonic license time sync
-│   ├── ui/clock/LicenseClockCard.kt        # Live ticking countdown card
-│   ├── ui/dashboard/DashboardScreen.kt      # Main dashboard container
-│   ├── ui/dashboard/external_mods/         # External Mod item & launch bridge
-│   └── ui/dialogs/ModActionDialogs.kt      # Download, Start & Verify dialogs
+│   ├── data/
+│   │   ├── InteractiveProcessBridge.kt     # Interactive stdin/stdout root shell bridge
+│   │   ├── ModDownloader.kt                # HTTP streaming file downloader
+│   │   └── SessionManager.kt               # Monotonic license duration & credentials
+│   ├── ui/
+│   │   ├── dashboard/
+│   │   │   ├── DashboardScreen.kt          # Renders LicenseClockCard & ExternalModsCard
+│   │   │   └── external_mods/
+│   │   │       └── ExternalModsCard.kt     # Single official external mod item
+│   │   ├── clock/
+│   │   │   └── LicenseClockCard.kt         # Live ticking digital countdown clock
+│   │   └── dialogs/
+│   │       └── ModActionDialogs.kt         # Material 3 confirm, animated download & license dialogs
 │
 app_backend/
 ├── downloads/
@@ -118,6 +108,7 @@ app_backend/
 │
 refer/nin/
 ├── .github/workflows/build.yml             # Builds & packages gemini-cli.sh
+├── package_sh.sh                           # Self-extracting runner packaging script
 ├── src/main.cpp                            # Entry point & stdin prompt gate
 └── src/protect/license.cpp                 # Online HTTP license verification
 ```
