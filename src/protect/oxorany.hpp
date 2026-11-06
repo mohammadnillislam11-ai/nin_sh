@@ -1,6 +1,6 @@
 /*
 
-@author llxiaoyuan https://github.com/llxiaoyuan/oxorany
+// (C) oxorany obfuscation engine
 
 MIT License
 
