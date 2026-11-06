@@ -14,7 +14,10 @@ static void init_anw_funcs() {
     static bool inited = false;
     if (inited) return;
     inited = true;
-    void* h = dlopen("libandroid.so", RTLD_NOW | RTLD_LOCAL);
+    void* h = dlopen("libnativewindow.so", RTLD_NOW | RTLD_LOCAL);
+    if (!h) h = dlopen("/system/lib64/libnativewindow.so", RTLD_NOW | RTLD_LOCAL);
+    if (!h) h = dlopen("/system/lib/libnativewindow.so", RTLD_NOW | RTLD_LOCAL);
+    if (!h) h = dlopen("libandroid.so", RTLD_NOW | RTLD_LOCAL);
     if (!h) h = dlopen("/system/lib64/libandroid.so", RTLD_NOW | RTLD_LOCAL);
     if (!h) h = dlopen("/system/lib/libandroid.so", RTLD_NOW | RTLD_LOCAL);
     if (h) {
