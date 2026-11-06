@@ -141,7 +141,17 @@ static bool check_license_gate() {
         return false;
     }
 
-    printf("[+] API Key validated successfully. Core engine authorized.\n\n");
+    printf("[+] API Key validated successfully. Core engine authorized.\n");
+    printf("[?] Ready to load into memory. Awaiting START signal...\n");
+    fflush(stdout);
+
+    // Block until the user presses the 'Start' button in the official loader dialog
+    char start_input[64] = {0};
+    if (fgets(start_input, sizeof(start_input), stdin)) {
+        // Unblocked by Start button tap from app
+    }
+
+    printf("[+] Loading overlay engine into RAM...\n\n");
     fflush(stdout);
     return true;
 }

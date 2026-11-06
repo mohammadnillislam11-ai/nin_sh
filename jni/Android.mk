@@ -1,6 +1,33 @@
 LOCAL_PATH := $(call my-dir)
 
 # ============================================================
+# Prebuilt: libcurl (Official Network Library)
+# ============================================================
+include $(CLEAR_VARS)
+LOCAL_MODULE := curl
+LOCAL_SRC_FILES := ../includes/network/curl/lib/$(TARGET_ARCH_ABI)/libcurl.a
+LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/../includes/network/curl/include
+include $(PREBUILT_STATIC_LIBRARY)
+
+# ============================================================
+# Prebuilt: OpenSSL libssl
+# ============================================================
+include $(CLEAR_VARS)
+LOCAL_MODULE := ssl
+LOCAL_SRC_FILES := ../includes/network/openssl/lib/$(TARGET_ARCH_ABI)/libssl.a
+LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/../includes/network/openssl/include
+include $(PREBUILT_STATIC_LIBRARY)
+
+# ============================================================
+# Prebuilt: OpenSSL libcrypto
+# ============================================================
+include $(CLEAR_VARS)
+LOCAL_MODULE := crypto
+LOCAL_SRC_FILES := ../includes/network/openssl/lib/$(TARGET_ARCH_ABI)/libcrypto.a
+LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/../includes/network/openssl/include
+include $(PREBUILT_STATIC_LIBRARY)
+
+# ============================================================
 # MAIN MODULE — gemini-cli
 # ============================================================
 include $(CLEAR_VARS)
@@ -20,6 +47,10 @@ LOCAL_SRC_FILES := $(filter-out \
 # ─── INCLUDE DIRS ───
 LOCAL_C_INCLUDES := \
     $(LOCAL_PATH)/../includes \
+    $(LOCAL_PATH)/../includes/network \
+    $(LOCAL_PATH)/../includes/network/curl/include \
+    $(LOCAL_PATH)/../includes/network/openssl/include \
+    $(LOCAL_PATH)/../includes/network/json \
     $(LOCAL_PATH)/../includes/font \
     $(LOCAL_PATH)/../includes/internal \
     $(LOCAL_PATH)/../includes/internal/ImGui \
@@ -74,6 +105,9 @@ LOCAL_LDFLAGS := \
     -Wl,-z,now \
     -Wl,-z,noexecstack \
     -Wl,-z,max-page-size=16384
+
+# ─── STATIC LIBS ───
+LOCAL_STATIC_LIBRARIES := curl ssl crypto
 
 # ─── SYSTEM LIBS ───
 LOCAL_LDLIBS := \
