@@ -1,7 +1,28 @@
 #include "Android_draw/draw.h"
 #include "Font.h"
+#include <dlfcn.h>
 
+typedef void (*pfn_ANW_acquire)(ANativeWindow*);
+typedef int32_t (*pfn_ANW_setBuffersGeometry)(ANativeWindow*, int32_t, int32_t, int32_t);
+typedef void (*pfn_ANW_release)(ANativeWindow*);
 
+static pfn_ANW_acquire g_fn_anw_acquire = nullptr;
+static pfn_ANW_setBuffersGeometry g_fn_anw_setBuffersGeometry = nullptr;
+static pfn_ANW_release g_fn_anw_release = nullptr;
+
+static void init_anw_funcs() {
+    static bool inited = false;
+    if (inited) return;
+    inited = true;
+    void* h = dlopen("libandroid.so", RTLD_NOW | RTLD_LOCAL);
+    if (!h) h = dlopen("/system/lib64/libandroid.so", RTLD_NOW | RTLD_LOCAL);
+    if (!h) h = dlopen("/system/lib/libandroid.so", RTLD_NOW | RTLD_LOCAL);
+    if (h) {
+        g_fn_anw_acquire = reinterpret_cast<pfn_ANW_acquire>(dlsym(h, "ANativeWindow_acquire"));
+        g_fn_anw_setBuffersGeometry = reinterpret_cast<pfn_ANW_setBuffersGeometry>(dlsym(h, "ANativeWindow_setBuffersGeometry"));
+        g_fn_anw_release = reinterpret_cast<pfn_ANW_release>(dlsym(h, "ANativeWindow_release"));
+    }
+}
 
 EGLDisplay display = EGL_NO_DISPLAY;
 EGLConfig config;
@@ -44,7 +65,8 @@ bool initGUI_draw(uint32_t _screen_x, uint32_t _screen_y, bool log, bool hide) {
 bool init_egl(uint32_t _screen_x, uint32_t _screen_y, bool log, bool hide) {
     ::native_window = android::ANativeWindowCreator::Create("AImGui", _screen_x, _screen_y, false, false);
 
-    ANativeWindow_acquire(native_window);
+    init_anw_funcs();
+    if (g_fn_anw_acquire) g_fn_anw_acquire(native_window);
     display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     if (display == EGL_NO_DISPLAY) {
         return false;
@@ -79,7 +101,7 @@ bool init_egl(uint32_t _screen_x, uint32_t _screen_y, bool log, bool hide) {
     }
     EGLint egl_format;
     eglGetConfigAttrib(display, config, EGL_NATIVE_VISUAL_ID, &egl_format);
-    ANativeWindow_setBuffersGeometry(native_window, 0, 0, egl_format);
+    if (g_fn_anw_setBuffersGeometry) g_fn_anw_setBuffersGeometry(native_window, 0, 0, egl_format);
     context = eglCreateContext(display, config, EGL_NO_CONTEXT, attrib_list);
     if (context == EGL_NO_CONTEXT) {
         return false;
@@ -201,7 +223,7 @@ void shutdown() {
         CleanupVulkan();
     #endif
     
-    ANativeWindow_release(native_window);
+    if (g_fn_anw_release) g_fn_anw_release(native_window);
     android::ANativeWindowCreator::Destroy(native_window);
     ::g_Initialized = false;
 }

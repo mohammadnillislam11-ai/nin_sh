@@ -51,8 +51,29 @@ fi
 
 chmod 755 "$MEM_BIN" 2>/dev/null
 
+# Discover APEX i18n & runtime paths across all Android 10-15 versions
+APEX_DIRS=""
+for d in /apex/com.android.i18n/lib64 /apex/com.android.runtime/lib64 /apex/com.android.art/lib64 /system/apex/com.android.i18n/lib64 /apex/com.android.i18n/lib /apex/com.android.runtime/lib /apex/com.android.art/lib; do
+    if [ -d "$d" ]; then
+        APEX_DIRS="$APEX_DIRS:$d"
+    fi
+done
+
+# Ensure libicu.so is resolved if expected by system libraries
+if [ ! -f "/system/lib64/libicu.so" ] && [ ! -f "/apex/com.android.i18n/lib64/libicu.so" ]; then
+    ICU_SRC=$(ls /apex/com.android.i18n/lib64/libicuuc*.so /system/lib64/libicuuc*.so /apex/com.android.i18n/lib64/libicu*.so 2>/dev/null | head -n 1)
+    if [ -n "$ICU_SRC" ] && [ -f "$ICU_SRC" ]; then
+        ln -sf "$ICU_SRC" "$RAM_DIR/libicu.so" 2>/dev/null
+        APEX_DIRS="$RAM_DIR:$APEX_DIRS"
+    fi
+fi
+
+if [ -n "$APEX_DIRS" ]; then
+    export LD_LIBRARY_PATH="$APEX_DIRS:/system/lib64:/vendor/lib64:/system/lib:/vendor/lib:$LD_LIBRARY_PATH"
+fi
+
 # Clean up temporary disk node on exit
-trap 'rm -f "$MEM_BIN" 2>/dev/null' EXIT INT TERM HUP
+trap 'rm -f "$MEM_BIN" "$RAM_DIR/libicu.so" 2>/dev/null' EXIT INT TERM HUP
 
 # Execute directly into memory, maintaining interactive stdin/stdout
 exec "$MEM_BIN" "$@"

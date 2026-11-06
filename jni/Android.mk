@@ -78,7 +78,6 @@ LOCAL_LDFLAGS := \
 # ─── SYSTEM LIBS ───
 LOCAL_LDLIBS := \
     -llog \
-    -landroid \
     -lEGL \
     -lGLESv3 \
     -lz \
