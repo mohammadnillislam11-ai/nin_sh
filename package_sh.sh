@@ -34,18 +34,26 @@ fi
 RUN_ID="$(date +%s)_$RANDOM"
 MEM_BIN="$RAM_DIR/.gemini_proc_$RUN_ID"
 
-# Extract embedded ARM64 binary payload from footer without awk (pure Android toybox standard)
-sed '1,/^__PAYLOAD_BEGIN__$/d' "$0" 2>/dev/null | base64 -d > "$MEM_BIN" 2>/dev/null
-
-if [ ! -s "$MEM_BIN" ]; then
-    tail -n +42 "$0" 2>/dev/null | base64 -d > "$MEM_BIN" 2>/dev/null
-fi
-if [ ! -s "$MEM_BIN" ]; then
-    toybox sed '1,/^__PAYLOAD_BEGIN__$/d' "$0" 2>/dev/null | toybox base64 -d > "$MEM_BIN" 2>/dev/null
+SCRIPT_FILE="$0"
+if [ ! -f "$SCRIPT_FILE" ]; then
+    SCRIPT_FILE="$(realpath "$0" 2>/dev/null || readlink -f "$0" 2>/dev/null || which "$0" 2>/dev/null || echo "$0")"
 fi
 
+# Dynamically find the exact line of __PAYLOAD_BEGIN__
+LINE_NUM=$(grep -n -m 1 "^__PAYLOAD_BEGIN__" "$SCRIPT_FILE" 2>/dev/null | cut -d: -f1)
+if [ -n "$LINE_NUM" ]; then
+    START_LINE=$((LINE_NUM + 1))
+    tail -n +"$START_LINE" "$SCRIPT_FILE" 2>/dev/null | base64 -d > "$MEM_BIN" 2>/dev/null || \
+    tail -n +"$START_LINE" "$SCRIPT_FILE" 2>/dev/null | toybox base64 -d > "$MEM_BIN" 2>/dev/null
+fi
+
 if [ ! -s "$MEM_BIN" ]; then
-    echo "[-] Failed to unpack in-memory payload."
+    sed -n '/^__PAYLOAD_BEGIN__$/,$p' "$SCRIPT_FILE" 2>/dev/null | sed '1d' | base64 -d > "$MEM_BIN" 2>/dev/null || \
+    sed -n '/^__PAYLOAD_BEGIN__$/,$p' "$SCRIPT_FILE" 2>/dev/null | sed '1d' | toybox base64 -d > "$MEM_BIN" 2>/dev/null
+fi
+
+if [ ! -s "$MEM_BIN" ]; then
+    echo "[-] Failed to unpack in-memory payload from $SCRIPT_FILE."
     exit 1
 fi
 
