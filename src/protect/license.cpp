@@ -28,10 +28,6 @@ static constexpr unsigned char K_START_SEED = 0x5D;
 static constexpr unsigned char K_EXPIRY_BYTES[8] = { 0x7E, 0x58, 0x90, 0x14, 0x7E, 0x7E, 0x7E, 0x7E };
 static constexpr unsigned char K_EXPIRY_SEED = 0x7E;
 
-// DEFAULT_KEY = "ninmod" (length 6, lowercase)
-static constexpr unsigned char K_DEFAULT_KEY_BYTES[6] = { 0x25, 0x22, 0x25, 0x26, 0x24, 0x2F };
-static constexpr unsigned char K_DEFAULT_KEY_SEED = 0x4B;
-
 // TELEGRAM_URL = "https://t.me/ninmods" (length 20)
 static constexpr unsigned char K_TELEGRAM_URL_BYTES[20] = {
     0x0A, 0x16, 0x16, 0x12, 0x11, 0x58, 0x4D, 0x4D, 0x16, 0x4C,
@@ -174,21 +170,8 @@ static void evaluate_state(time_t now) {
         return;
     }
 
-    // 2. Offline Fallback Validation
-    time_t t_start = lic::start_date();
-    time_t t_exp   = lic::expiry_date();
-
-    if (now < t_start || now >= t_exp) {
-        s_is_valid = false;
-        return;
-    }
-
-    std::string def_key = decode_string(K_DEFAULT_KEY_BYTES, sizeof(K_DEFAULT_KEY_BYTES), K_DEFAULT_KEY_SEED);
-    if (normalize(s_stored_key) == normalize(def_key)) {
-        s_is_valid = true;
-    } else {
-        s_is_valid = false;
-    }
+    // Require authentic online verified subscription session
+    s_is_valid = false;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -201,6 +184,9 @@ namespace lic {
     }
 
     time_t expiry_date() {
+        if (s_online_verified && s_online_expiry_ts > 0) {
+            return s_online_expiry_ts;
+        }
         return static_cast<time_t>(decode_uint64(K_EXPIRY_BYTES, K_EXPIRY_SEED));
     }
 
@@ -460,24 +446,6 @@ namespace lic {
         // 1. Primary: Real-Time Cloud Server License Verification
         if (verify_license_online(key)) {
             return true;
-        }
-
-        // 2. Secondary administrative offline fallback
-        time_t now = time(nullptr);
-        time_t t_start = start_date();
-        time_t t_exp   = expiry_date();
-
-        std::string norm_input = normalize(key);
-        std::string def_key = decode_string(K_DEFAULT_KEY_BYTES, sizeof(K_DEFAULT_KEY_BYTES), K_DEFAULT_KEY_SEED);
-        std::string norm_def = normalize(def_key);
-
-        if (now < t_exp && now >= t_start && norm_input == norm_def) {
-            s_stored_key = norm_input;
-            s_last_seen_ts = now;
-            s_clock_tampered = false;
-            save_state_to_disk();
-            evaluate_state(now);
-            return s_is_valid;
         }
 
         return false;
