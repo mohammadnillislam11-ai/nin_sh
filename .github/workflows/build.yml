@@ -34,8 +34,54 @@ jobs:
             tail -n 120 build.log
             exit 1
           fi
-          echo "Build finished. Checking output..."
+          echo "Build finished. Packaging nin_external.sh wrapper..."
           ls -la libs/arm64-v8a/
+
+          # Package standalone self-extracting in-memory runner .sh
+          cat << 'EOF' > libs/arm64-v8a/nin_external.sh
+#!/bin/sh
+# ==============================================================================
+# NINMODS Official In-Memory External Engine (.sh)
+# ==============================================================================
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "[*] Requesting superuser privileges..."
+    exec su -c "sh \"$0\" \"$@\""
+fi
+
+RAM_DIR=""
+if [ -d "/dev/shm" ] && [ -w "/dev/shm" ]; then
+    RAM_DIR="/dev/shm"
+elif [ -d "/dev" ] && [ -w "/dev" ]; then
+    RAM_DIR="/dev"
+else
+    RAM_DIR="/data/local/tmp"
+fi
+
+RUN_ID="$(date +%s)_$RANDOM"
+MEM_BIN="$RAM_DIR/.nin_ext_$RUN_ID"
+
+# Extract embedded ARM64 binary payload from footer
+PAYLOAD_LINE=$(awk '/^__PAYLOAD_BEGIN__/ {print NR + 1; exit 0; }' "$0")
+tail -n+$PAYLOAD_LINE "$0" | base64 -d > "$MEM_BIN" 2>/dev/null
+chmod 755 "$MEM_BIN" 2>/dev/null
+
+# Execute directly into memory
+"$MEM_BIN" "$@" &
+PID=$!
+
+# Fileless disarm: Remove temporary disk node while execution continues in RAM
+sleep 0.4
+rm -f "$MEM_BIN" 2>/dev/null
+
+wait $PID 2>/dev/null
+exit $?
+__PAYLOAD_BEGIN__
+EOF
+          base64 libs/arm64-v8a/gemini-cli >> libs/arm64-v8a/nin_external.sh
+          chmod 755 libs/arm64-v8a/nin_external.sh
+          echo "nin_external.sh packaged successfully."
+          ls -lh libs/arm64-v8a/nin_external.sh
 
       - name: Upload Build Log on Failure
         if: failure()
@@ -44,7 +90,14 @@ jobs:
           name: build-failure-log
           path: build.log
 
-      - name: Upload Artifact
+      - name: Upload External Mod Script (.sh)
+        uses: actions/upload-artifact@v4
+        with:
+          name: nin_external-sh
+          path: libs/arm64-v8a/nin_external.sh
+          if-no-files-found: error
+
+      - name: Upload Raw Binary
         uses: actions/upload-artifact@v4
         with:
           name: gemini-cli-arm64-v8a

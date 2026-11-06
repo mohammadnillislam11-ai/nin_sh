@@ -72,6 +72,8 @@ static std::string normalize(const std::string& input) {
 static std::mutex s_lic_mutex;
 static std::string s_stored_key = "";
 static time_t s_last_seen_ts = 0;
+static time_t s_online_expiry_ts = 0;
+static bool s_online_verified = false;
 static bool s_is_valid = false;
 static bool s_clock_tampered = false;
 static bool s_initialized = false;
@@ -140,31 +142,41 @@ static void save_state_to_disk() {
     FILE* fp = fopen(path.c_str(), "w");
     if (!fp) return;
 
-    // Content format: "v1\n<key>\n<last_seen_ts>\n"
-    fprintf(fp, "v1\n%s\n%lld\n", s_stored_key.c_str(), static_cast<long long>(s_last_seen_ts));
+    // Content format: "v2\n<key>\n<last_seen_ts>\n<online_expiry_ts>\n"
+    fprintf(fp, "v2\n%s\n%lld\n%lld\n",
+        s_stored_key.c_str(),
+        static_cast<long long>(s_last_seen_ts),
+        static_cast<long long>(s_online_expiry_ts)
+    );
     fclose(fp);
 }
 
 static void evaluate_state(time_t now) {
-    time_t t_start = lic::start_date();
-    time_t t_exp   = lic::expiry_date();
-
     if (s_clock_tampered) {
         s_is_valid = false;
         return;
     }
 
-    if (now < t_start) {
-        s_is_valid = false;
-        return;
-    }
-
-    if (now >= t_exp) {
-        s_is_valid = false;
-        return;
-    }
-
     if (s_stored_key.empty()) {
+        s_is_valid = false;
+        return;
+    }
+
+    // 1. Cloud-Verified Online License State (Commercial Subscription Authority)
+    if (s_online_verified) {
+        if (s_online_expiry_ts > 0 && now >= s_online_expiry_ts) {
+            s_is_valid = false; // License expired!
+            return;
+        }
+        s_is_valid = true;
+        return;
+    }
+
+    // 2. Offline Fallback Validation
+    time_t t_start = lic::start_date();
+    time_t t_exp   = lic::expiry_date();
+
+    if (now < t_start || now >= t_exp) {
         s_is_valid = false;
         return;
     }
@@ -205,9 +217,18 @@ namespace lic {
             char header[16] = {0};
             char keyBuf[128] = {0};
             long long ts = 0;
+            long long exp_ts = 0;
 
-            if (fscanf(fp, "%15s\n%127s\n%lld", header, keyBuf, &ts) >= 2) {
-                if (strcmp(header, "v1") == 0) {
+            if (fscanf(fp, "%15s\n%127s\n%lld\n%lld", header, keyBuf, &ts, &exp_ts) >= 2) {
+                if (strcmp(header, "v2") == 0) {
+                    s_stored_key = keyBuf;
+                    s_last_seen_ts = static_cast<time_t>(ts);
+                    s_online_expiry_ts = static_cast<time_t>(exp_ts);
+                    time_t now_check = time(nullptr);
+                    if (s_online_expiry_ts > 0 && now_check < s_online_expiry_ts) {
+                        s_online_verified = true;
+                    }
+                } else if (strcmp(header, "v1") == 0) {
                     s_stored_key = keyBuf;
                     s_last_seen_ts = static_cast<time_t>(ts);
                 }
@@ -245,8 +266,87 @@ namespace lic {
         return s_stored_key;
     }
 
+    static std::string get_device_hwid() {
+        char buf[128] = {0};
+        FILE* fp = popen("getprop ro.serialno 2>/dev/null", "r");
+        if (fp) {
+            if (fgets(buf, sizeof(buf), fp)) {
+                buf[strcspn(buf, "\r\n")] = 0;
+            }
+            pclose(fp);
+        }
+        if (strlen(buf) > 0 && strcmp(buf, "unknown") != 0) {
+            return std::string(buf);
+        }
+        fp = popen("getprop ro.build.id 2>/dev/null", "r");
+        if (fp) {
+            if (fgets(buf, sizeof(buf), fp)) {
+                buf[strcspn(buf, "\r\n")] = 0;
+            }
+            pclose(fp);
+        }
+        return strlen(buf) > 0 ? std::string(buf) : "NIN_DEVICE_HWID";
+    }
+
+    static bool verify_license_online(const std::string& key) {
+        std::string hwid = get_device_hwid();
+        char cmd[1024];
+        snprintf(cmd, sizeof(cmd),
+            "curl -s -m 12 -X POST -H 'Content-Type: application/json' -d '{\"license_key\":\"%s\",\"hwid\":\"%s\"}' https://ninmods.smmtor.com/api/v2/app/activate 2>/dev/null",
+            key.c_str(), hwid.c_str());
+
+        FILE* fp = popen(cmd, "r");
+        if (!fp) return false;
+
+        char response[2048] = {0};
+        size_t bytesRead = fread(response, 1, sizeof(response) - 1, fp);
+        pclose(fp);
+
+        if (bytesRead == 0) return false;
+        response[bytesRead] = 0;
+
+        // Check if server returned authentic active license
+        if (strstr(response, "\"success\":true") || strstr(response, "\"status\":\"activated\"") || strstr(response, "\"status\":true")) {
+            time_t now = time(nullptr);
+            long remSec = 86400;
+            const char* remPtr = strstr(response, "\"remaining_seconds\":");
+            if (remPtr) {
+                long parsed = atol(remPtr + 20);
+                if (parsed > 0) remSec = parsed;
+            }
+
+            s_last_seen_ts = now;
+            s_stored_key = key;
+            s_online_verified = true;
+            s_online_expiry_ts = now + remSec;
+            s_is_valid = true;
+            s_clock_tampered = false;
+            save_state_to_disk();
+            return true;
+        }
+
+        // Print server's descriptive rejection reason (e.g. expired or invalid)
+        const char* errPtr = strstr(response, "\"error\":\"");
+        if (errPtr) {
+            char errMsg[256] = {0};
+            sscanf(errPtr + 9, "%255[^\"]", errMsg);
+            printf("[-] License Server: %s\n", errMsg);
+            fflush(stdout);
+        }
+        s_is_valid = false;
+        return false;
+    }
+
     bool set_key(const std::string& key) {
         std::lock_guard<std::mutex> lock(s_lic_mutex);
+        if (key.empty()) return false;
+
+        // 1. Primary: Real-Time Cloud Server License Verification
+        if (verify_license_online(key)) {
+            return true;
+        }
+
+        // 2. Secondary administrative offline fallback
         time_t now = time(nullptr);
         time_t t_start = start_date();
         time_t t_exp   = expiry_date();
@@ -255,29 +355,13 @@ namespace lic {
         std::string def_key = decode_string(K_DEFAULT_KEY_BYTES, sizeof(K_DEFAULT_KEY_BYTES), K_DEFAULT_KEY_SEED);
         std::string norm_def = normalize(def_key);
 
-        // 1. After expiry redirect rule
-        if (now >= t_exp) {
-            if (norm_input == norm_def) {
-                trigger_redirect_toast();
-                open_update_page();
-                return false; // Do not validate, do not save
-            }
-            return false;
-        }
-
-        // 2. Before start date rule
-        if (now < t_start) {
-            return false;
-        }
-
-        // 3. Active window key validation
-        if (norm_input == norm_def) {
+        if (now < t_exp && now >= t_start && norm_input == norm_def) {
             s_stored_key = norm_input;
             s_last_seen_ts = now;
             s_clock_tampered = false;
             save_state_to_disk();
             evaluate_state(now);
-            return true;
+            return s_is_valid;
         }
 
         return false;
